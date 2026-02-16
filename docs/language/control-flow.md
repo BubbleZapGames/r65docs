@@ -1,101 +1,33 @@
 ---
 sidebar_position: 5
 title: Control Flow
-description: How R65 control flow maps to 65816 branch and jump instructions, compiler strategies, and optimization.
+description: R65 conditionals, loops, and early exit patterns.
 ---
 
 # Control Flow
 
-This page covers how R65 control flow constructs map to 65816 hardware instructions, the compiler's code generation strategies, and optimization techniques. For full syntax and semantics of each construct, see [Statements](./statements.md).
-
-## Design Principles
-
-- **Direct mapping to assembly**: Every control flow construct compiles to a predictable sequence of branch and jump instructions
-- **Transparent branch handling**: The compiler automatically fixes long branches without programmer intervention
-- **No runtime overhead**: Structured control flow compiles to the same instructions a hand-written assembly programmer would use
-- **Early exit patterns**: `break`, `continue`, and `return` map directly to jumps
-
----
-
-## Branch Distance Limitations
-
-The 65816 has two categories of control flow instructions with different reach:
-
-### Conditional Branches
-
-| Instruction | Meaning | Range | Cycles |
-|-------------|---------|-------|--------|
-| `BEQ` / `BNE` | Branch if equal / not equal | ±127 bytes | 2--3 |
-| `BCC` / `BCS` | Branch if carry clear / set | ±127 bytes | 2--3 |
-| `BMI` / `BPL` | Branch if minus / plus | ±127 bytes | 2--3 |
-| `BVC` / `BVS` | Branch if overflow clear / set | ±127 bytes | 2--3 |
-
-Conditional branches use an 8-bit signed offset, limiting them to targets within 128 bytes in either direction. They cost 2 cycles when not taken and 3 cycles when taken.
-
-### Unconditional Jumps
-
-| Instruction | Range | Cycles |
-|-------------|-------|--------|
-| `JMP` (absolute) | Full 64KB bank | 3 |
-| `BRA` (relative) | ±127 bytes | 3 |
-| `BRL` (long relative) | ±32KB | 4 |
-
-### Automatic Long Branch Fixup
-
-The compiler handles branch distance transparently through a post-optimization fixup pass:
-
-1. **Generate code normally** -- emit conditional branches to target labels
-2. **Run peephole optimization** -- finalize instruction sequences
-3. **Branch fixup pass** -- calculate actual distances and fix branches that exceed ±127 bytes
-
-When a conditional branch target is too far, the compiler inverts the condition and inserts a `JMP`:
-
-```asm
-; Original (target > 127 bytes away):
-    BEQ far_target
-
-; Compiler rewrites to:
-    BNE __branch_skip_0     ; inverted condition (nearby target)
-    JMP far_target           ; JMP has no range limit
-__branch_skip_0:
-```
-
-**Branch inversion table:**
-
-| Original | Inverted |
-|----------|----------|
-| BEQ | BNE |
-| BNE | BEQ |
-| BCC | BCS |
-| BCS | BCC |
-| BMI | BPL |
-| BPL | BMI |
-| BVC | BVS |
-| BVS | BVC |
-
-This is invisible to the programmer. Write control flow naturally and the compiler handles long branches.
+R65 provides structured control flow that maps efficiently to 65816 branch and jump instructions. All constructs compile with zero overhead compared to hand-written assembly.
 
 ---
 
 ## If Statements
 
-The compiler generates inverted branch conditions as its default strategy, eliminating an extra `JMP` in the common case.
-
 ### Basic If
+
+The condition must evaluate to `bool` or a comparable expression. The body executes only when the condition is true.
 
 ```rust
 if x > 10 {
     process();
 }
-```
 
-```asm
-    LDA x
-    CMP #10
-    BCC skip            ; inverted: branch if x <= 10
-    BEQ skip
-    JSR process
-skip:
+if (flags & 0x80) != 0 {
+    handle_error();
+}
+
+if ready {
+    start_game();
+}
 ```
 
 ### If-Else
@@ -108,203 +40,274 @@ if health == 0 {
 }
 ```
 
-```asm
-    LDA health
-    BNE else_block       ; inverted: branch if health != 0
-    JSR game_over
-    JMP end
-else_block:
-    JSR continue_game
-end:
-```
-
 ### If-Else Chain
 
-Each condition is tested sequentially. The compiler can reorder conditions or use jump tables for better performance when applicable.
+Any number of `else if` clauses may appear. The final `else` is optional for statements.
 
 ```rust
 if x < 10 {
     category = 0;
 } else if x < 20 {
     category = 1;
-} else {
+} else if x < 30 {
     category = 2;
+} else {
+    category = 3;
 }
-```
-
-```asm
-    LDA x
-    CMP #10
-    BCS check2           ; x >= 10, check next
-    LDA #0
-    STA category
-    JMP end
-check2:
-    LDA x
-    CMP #20
-    BCS else_block
-    LDA #1
-    STA category
-    JMP end
-else_block:
-    LDA #2
-    STA category
-end:
 ```
 
 ### If-Else as Expression
 
-When used as an expression, both branches must be present and produce the same type. See [Statements -- If-Else as Expression](./statements.md#if-else-as-expression) for syntax details.
+When used as an expression, both branches are required and must produce the same type. The last expression in each branch (without a trailing semicolon) is the branch's value.
 
 ```rust
-let category: u8 = if x < 10 { 0 } else { 1 };
+let category: u8 = if x < 10 {
+    0
+} else if x < 20 {
+    1
+} else {
+    2
+};
+
+let abs_val: u8 = if x >= 0 { x } else { 0 - x };
+```
+
+`else if` chains are permitted in expression position.
+
+---
+
+## Block Expressions
+
+A block `{ ... }` can be used as an expression. The last item in the block, written without a trailing semicolon, is the block's value. Variables declared inside the block are scoped to the block.
+
+```rust
+let result: u8 = {
+    let temp: u8 = compute();
+    temp + 1
+};
+
+let offset: u16 = {
+    let row: u16 = (y as u16) << 5;
+    row + (x as u16)
+};
 ```
 
 ---
 
 ## Loops
 
-### Infinite Loop
+### Infinite Loop: `loop`
 
-`loop` compiles to an unconditional backward jump. It is the primary pattern for main game loops.
+Repeats indefinitely. Use `break` to exit or `return` to exit the enclosing function.
 
 ```rust
-loop {
-    update();
+#[entry]
+fn main() -> ! {
+    init();
+    loop {
+        wait_vblank();
+        update_game();
+        render();
+    }
 }
-```
 
-```asm
-loop_start:
-    JSR update
-    JMP loop_start
+// Polling loop
+loop {
+    if HVBJOY & 0x01 != 0 {
+        break;
+    }
+}
 ```
 
 ### While Loop
 
-The condition is checked before each iteration. The compiler uses an inverted branch to exit.
+The condition is checked **before** each iteration. If initially false, the body never executes.
 
 ```rust
 while count > 0 {
     process();
     count -= 1;
 }
-```
 
-```asm
-loop_start:
-    LDA count
-    BEQ loop_end         ; exit if count == 0
-    JSR process
-    DEC count
-    JMP loop_start
-loop_end:
-```
+while !ready {
+    wait();
+}
 
-### For Loop
-
-Range-based `for` loops desugar to a while loop with an increment. Only `start..end` (exclusive) and `start..=end` (inclusive) ranges are supported. See [Statements -- For Loop](./statements.md#for-loop-range-based) for syntax details.
-
-```rust
-for i in 0..10 {
-    process(i);
+let mut index = 0;
+while index < 10 {
+    buffer[index] = 0;
+    index += 1;
 }
 ```
 
-```asm
-    LDA #0
-    STA i
-loop_start:
-    LDA i
-    CMP #10
-    BCS loop_end
-    LDA i
-    JSR process
-    INC i
-    JMP loop_start
-loop_end:
+### For Loop (Range-Based)
+
+Iterates over a range of integers. Only range syntax is supported -- there are no iterator-based `for` loops.
+
+- `start..end` -- **exclusive**: iterates from `start` to `end - 1`
+- `start..=end` -- **inclusive**: iterates from `start` to `end`
+
+The loop variable is automatically declared as mutable with the type inferred from the range bounds.
+
+```rust
+// Exclusive range
+for i in 0..256 {
+    buffer[i] = 0;
+}
+
+// Inclusive range
+for i in 0..=255 {
+    table[i] = i as u8;
+}
+
+// Nested loops
+for y in 0..8 {
+    for x in 0..8 {
+        process_tile(x, y);
+    }
+}
+
+// Using constants
+const WIDTH: u8 = 32;
+const HEIGHT: u8 = 28;
+for row in 0..HEIGHT {
+    for col in 0..WIDTH {
+        draw_cell(col, row);
+    }
+}
 ```
 
 ### Labeled Loops
 
-Labels allow `break` and `continue` to target a specific outer loop. See [Statements -- Labeled Loops](./statements.md#labeled-loops) for syntax rules.
+Any loop can have a label, enabling `break` and `continue` to target a specific enclosing loop.
+
+Labels start with `'` followed by an identifier and `:`. They are only valid on loop statements. Referencing a non-existent or non-enclosing label is a compile error.
 
 ```rust
 'outer: for y in 0..8 {
     for x in 0..8 {
         if tile_map[y * 8 + x] == target {
-            break 'outer;
+            break 'outer;       // exit both loops
         }
     }
 }
+
+'rows: for y in 0..HEIGHT {
+    for x in 0..WIDTH {
+        if skip_row[y] {
+            continue 'rows;     // skip to next row
+        }
+        process_cell(x, y);
+    }
+}
 ```
 
-The compiler generates a `JMP` to the outer loop's exit label, bypassing all inner loop cleanup.
+### Loop Expressions
+
+A `loop` can be used as an expression when `break` carries a value. All `break` statements within the loop must provide a value of the same type.
+
+```rust
+let found_index: u8 = loop {
+    if buffer[i] == target {
+        break i;
+    }
+    i += 1;
+    if i >= len {
+        break 0xFF;            // sentinel for "not found"
+    }
+};
+```
 
 ---
 
-## Break and Continue
+## Break
 
-### Break
-
-`break` compiles to a `JMP` to the loop's exit label. `break 'label` jumps to the exit label of the named loop.
+`break` immediately exits a loop. `break 'label` exits the loop with the specified label. Using `break` outside any loop is a compile error.
 
 ```rust
-loop {
-    if ready {
+break;                          // exit innermost loop
+break 'label;                   // exit labeled loop
+break value;                    // exit loop expression with value
+break 'label value;             // exit labeled loop expression with value
+```
+
+```rust
+// Search with early exit
+let mut index = 0;
+let mut found = false;
+while index < 256 {
+    if buffer[index] == target {
+        found = true;
         break;
     }
-    wait();
-}
-```
-
-```asm
-loop_start:
-    LDA ready
-    BEQ not_ready
-    JMP loop_end         ; break
-not_ready:
-    JSR wait
-    JMP loop_start
-loop_end:
-```
-
-### Continue
-
-`continue` compiles to a `JMP` to the loop's condition check (for `while`/`for`) or the loop start (for `loop`). For `for` loops, the loop variable is incremented before the jump.
-
-```rust
-while index < 10 {
-    if skip_table[index] {
-        index += 1;
-        continue;
-    }
-    process(index);
     index += 1;
 }
+
+// Read until done
+loop {
+    let input = read_controller();
+    if input == 0 {
+        break;
+    }
+    process(input);
+}
 ```
 
-```asm
-loop_start:
-    LDA index
-    CMP #10
-    BCS loop_end
-    LDX index
-    LDA skip_table,X
-    BEQ not_skipped
-    INC index
-    JMP loop_start       ; continue
-not_skipped:
-    LDA index
-    JSR process
-    INC index
-    JMP loop_start
-loop_end:
+---
+
+## Continue
+
+`continue` skips the rest of the current iteration. For `while` and `for`, this re-checks the condition (and for `for`, increments the loop variable first). For `loop`, this jumps to the top of the loop body.
+
+`continue 'label` targets the labeled loop. Using `continue` outside any loop is a compile error.
+
+```rust
+continue;                       // skip to next iteration
+continue 'label;                // skip to next iteration of labeled loop
 ```
 
-### Nested Loop Patterns
+```rust
+let mut i = 0;
+while i < 100 {
+    i += 1;
 
-Without labels, `break` only exits the innermost loop. A common pattern uses a flag variable to break out of multiple levels:
+    if (i & 0x01) != 0 {       // skip odd numbers
+        continue;
+    }
+
+    process_even(i);
+}
+
+loop {
+    let status = read_status();
+
+    if status == 0xFF {
+        continue;               // ignore invalid status
+    }
+
+    handle(status);
+
+    if done {
+        break;
+    }
+}
+
+// Labeled continue
+'rows: for y in 0..HEIGHT {
+    for x in 0..WIDTH {
+        if skip_row[y] {
+            continue 'rows;     // skip rest of this row
+        }
+        process_cell(x, y);
+    }
+}
+```
+
+---
+
+## Nested Loop Patterns
+
+Without labels, `break` only exits the innermost loop. A flag variable can propagate the exit outward:
 
 ```rust
 let mut found = false;
@@ -314,24 +317,24 @@ while y < 8 {
     while x < 8 {
         if tile[y][x] == target {
             found = true;
-            break;          // breaks inner loop only
+            break;              // breaks inner loop only
         }
         x += 1;
     }
     if found {
-        break;              // breaks outer loop
+        break;                  // breaks outer loop
     }
     y += 1;
 }
 ```
 
-Labeled break is cleaner:
+Labeled break is cleaner and more efficient:
 
 ```rust
 'outer: for y in 0..8 {
     for x in 0..8 {
         if tile[y][x] == target {
-            break 'outer;   // exits both loops directly
+            break 'outer;       // exits both loops directly
         }
     }
 }
@@ -341,11 +344,20 @@ Labeled break is cleaner:
 
 ## Return
 
-`return` compiles to `RTS` (near functions) or `RTL` (far functions). See [Statements -- Return](./statements.md#return) and [Functions -- Return Values](./functions.md#return-values) for full syntax.
+`return` immediately exits the current function. See [Functions -- Return Values](./functions.md#return-values) for register assignment conventions.
+
+```rust
+return;                         // exit function (implicit A return if typed)
+return value;                   // return single value
+return a, b;                    // return multiple values (no parentheses)
+return a, b, c;                 // return three values
+```
+
+All return paths in a function must have identical return signatures.
 
 ### Implicit A Return
 
-If a function has a return type and the body ends without an explicit `return`, the current value of the A register is returned:
+If a function has a return type and the body ends without an explicit `return`, the current value of A is returned:
 
 ```rust
 fn get_status() -> u8 {
@@ -354,39 +366,27 @@ fn get_status() -> u8 {
 }
 ```
 
-```asm
-get_status:
-    LDA STATUS
-    AND #$0F
-    RTS                  ; A contains return value
-```
-
 ### Early Return
 
-Early `return` generates an `RTS`/`RTL` at the return point. The compiler ensures A contains the correct value on all paths:
+`return` can appear anywhere in the function body to exit early:
 
 ```rust
 fn validate(input @ A: u8) -> u8 {
     if input == 0 {
-        return 0xFF;
+        return 0xFF;            // early exit
     }
-    return input;
-}
-```
 
-```asm
-    CMP #0
-    BNE not_zero
-    LDA #$FF
-    RTS                  ; early return
-not_zero:
-    ; A still holds input
-    RTS
+    if input > 100 {
+        return 100;             // early exit
+    }
+
+    return input;               // normal return
+}
 ```
 
 ### Multiple Return Values
 
-Functions can return up to three values using registers. See [Functions -- Multiple Return Values](./functions.md#multiple-return-values) for register assignment conventions.
+Functions can return up to three values using registers:
 
 ```rust
 fn get_xy() -> (u8, u8) {
@@ -394,322 +394,86 @@ fn get_xy() -> (u8, u8) {
     Y = PLAYER_Y;
     return X, Y;
 }
+
+let (px, py) = get_xy();
 ```
 
-### Never Type
+### Never Type: `-> !`
 
-Functions with `-> !` never return. The compiler omits `RTS`/`RTL` and emits `WAI` as a safety fallback if control flow somehow reaches the end:
+Functions that never return use the `!` type. The compiler omits `RTS`/`RTL`. Common for entry points and error handlers.
 
 ```rust
-fn infinite() -> ! {
-    loop { }
+#[entry]
+fn main() -> ! {
+    init();
+    loop {
+        update();
+    }
+}
+
+fn fatal_error() -> ! {
+    SCREEN = 0x00;              // black screen
+    loop {
+        asm!("STP");            // stop processor
+    }
 }
 ```
 
-```asm
-infinite:
-loop_start:
-    JMP loop_start
-    ; No RTS emitted
-```
-
-If a `-> !` function accidentally allows control flow to reach the end:
-
-```asm
-broken_never:
-    WAI                  ; safety fallback -- halts CPU until interrupt
-```
-
----
-
-## Match Expressions
-
-`match` tests a scrutinee against patterns and executes the first matching arm. See [Statements -- Match Expressions](./statements.md#match-expressions) for full syntax, pattern types, and exhaustiveness rules.
-
-### Optimization Strategies
-
-The compiler automatically selects the best code generation strategy based on pattern analysis:
-
-| Strategy | When Used | Complexity | Example |
-|----------|-----------|------------|---------|
-| Lookup table | Dense range, all arms are compile-time constants | O(1) | `match tile_id { 0 => 10, 1 => 20, 2 => 30, _ => 0 }` |
-| Jump table | Dense range, arm bodies are not constant | O(1) | `match state { 0 => handle_a(), 1 => handle_b(), ... }` |
-| Branch chain | Sparse patterns or few arms | O(n) | `match val { 0 => ..., 100 => ..., 200 => ... }` |
-
-Range patterns are expanded to individual values for density analysis and can trigger table optimizations. Or-patterns (`a | b`) currently fall back to branch chains.
-
-### Branch Chain Assembly
-
-```rust
-match val {
-    0 => handle_zero(),
-    1 => handle_one(),
-    _ => handle_other(),
-}
-```
-
-```asm
-    CMP #0
-    BNE _check_1
-    JSR handle_zero
-    JMP _merge
-_check_1:
-    CMP #1
-    BNE _default
-    JSR handle_one
-    JMP _merge
-_default:
-    JSR handle_other
-_merge:
-```
-
-### Range Pattern Assembly
-
-```rust
-match val {
-    0..=15 => handle_low(),
-    _ => handle_high(),
-}
-```
-
-```asm
-    CMP #0
-    BCC _default         ; val < 0? (unsigned: generated for completeness)
-    CMP #16
-    BCS _default         ; val >= 16? → default
-    JSR handle_low
-    JMP _merge
-_default:
-    JSR handle_high
-_merge:
-```
+A function declared `-> !` that can actually return is a compile error.
 
 ---
 
 ## Short-Circuit Evaluation
 
-The logical operators `&&` and `||` use short-circuit (lazy) evaluation, mapping directly to conditional branch sequences.
+The logical operators `&&` and `||` use short-circuit (lazy) evaluation.
 
-### Logical AND
-
-The right operand is evaluated only if the left operand is true:
+**Logical AND** (`&&`): the right operand is evaluated only if the left operand is true.
 
 ```rust
 if check_a() && check_b() {
     execute();
 }
+// check_b() only called if check_a() returns true
 ```
 
-```asm
-    JSR check_a
-    BEQ skip             ; false → skip second check
-    JSR check_b
-    BEQ skip
-    JSR execute
-skip:
-```
-
-### Logical OR
-
-The right operand is evaluated only if the left operand is false:
+**Logical OR** (`||`): the right operand is evaluated only if the left operand is false.
 
 ```rust
 if quick_check() || slow_check() {
     execute();
 }
+// slow_check() only called if quick_check() returns false
 ```
 
-```asm
-    JSR quick_check
-    BNE do_execute       ; true → skip second check
-    JSR slow_check
-    BEQ skip
-do_execute:
-    JSR execute
-skip:
-```
-
-### Chained Conditions
-
-Multiple `&&` conditions generate a cascade of early-exit branches:
+Multiple conditions can be chained:
 
 ```rust
 if a && b && c {
     execute();
 }
-```
 
-```asm
-    LDA a
-    BEQ skip
-    LDA b
-    BEQ skip
-    LDA c
-    BEQ skip
-    JSR execute
-skip:
+if has_powerup || health > 50 || is_invincible {
+    allow_action();
+}
 ```
 
 ---
 
-## Optimization
+## Constant Folding
 
-### Condition Inversion
-
-The compiler's default code generation strategy inverts branch conditions, eliminating an extra `JMP` in the common case:
-
-```rust
-// Source
-if x != 0 {
-    process();
-}
-next();
-```
-
-Naive assembly would require a `JMP` over the true block:
-
-```asm
-; Naive (extra JMP):
-    LDA x
-    BNE true_block
-    JMP skip
-true_block:
-    JSR process
-skip:
-    JSR next
-```
-
-The compiler inverts the condition instead:
-
-```asm
-; Optimized (no extra JMP):
-    LDA x
-    BEQ skip             ; inverted: BNE → BEQ
-    JSR process
-skip:
-    JSR next
-```
-
-### Dead Code Elimination
-
-Code that can never execute is removed:
-
-```rust
-if false {
-    unreachable();       // entire block removed
-}
-
-if true {
-    always_runs();       // condition removed, body always executes
-}
-```
-
-### Constant Folding
-
-Compile-time constant conditions are evaluated during compilation:
+Compile-time constant conditions are evaluated during compilation and the unreachable branch is removed. Unlike C preprocessor `#ifdef`, the code is still type-checked before removal.
 
 ```rust
 const DEBUG: bool = false;
 
 if DEBUG {
-    log_message();       // entire block removed when DEBUG = false
-}
-```
-
-This is particularly useful for conditional compilation patterns. Unlike C preprocessor `#ifdef`, the code is still type-checked before removal.
-
----
-
-## Assembly Label Generation
-
-### Naming Convention
-
-The compiler generates labels using the pattern:
-
-```
-function_name__L{block_id}
-```
-
-Block IDs are sequential integers assigned during MIR CFG construction. There are no descriptive suffixes like `_if` or `_loop` -- all blocks use the same `__L{id}` format.
-
-Examples: `main__L0`, `main__L1`, `update__L0`, `update__L1`
-
-Comparison helpers use `__SCMP{N}` labels with a globally unique counter.
-
-### Label Scoping
-
-Labels are function-scoped to avoid conflicts between functions:
-
-```rust
-fn foo() {
-    loop { break; }      // foo__L0, foo__L1, foo__L2
+    log_message();              // entire block removed when DEBUG = false
 }
 
-fn bar() {
-    loop { break; }      // bar__L0, bar__L1, bar__L2
+if true {
+    always_runs();              // condition removed, body always executes
 }
 ```
-
----
-
-## Control Flow in Register Context
-
-### Register Preservation Across Branches
-
-The compiler ensures registers contain the correct value on all code paths:
-
-```rust
-fn process(value @ A: u8) -> u8 {
-    if value > 100 {
-        return 100;
-    }
-    return value;
-}
-```
-
-```asm
-    CMP #100
-    BCC not_too_high
-    LDA #100             ; overwrite A with clamped value
-    RTS
-not_too_high:
-    ; A still contains original value
-    RTS
-```
-
-### Register Aliasing in Loops
-
-Register aliases are maintained across loop iterations. The compiler keeps values in hardware registers throughout the loop body:
-
-```rust
-fn sum_array(arr: *u8) -> u8 {
-    let total @ A = 0;
-    let index @ X = 0;
-
-    while index < 10 {
-        total = total + arr[index];
-        index += 1;
-    }
-
-    return total;
-}
-```
-
-```asm
-    LDA #0               ; total = 0
-    LDX #0               ; index = 0
-loop_start:
-    CPX #10
-    BCS loop_end
-    CLC
-    ADC arr,X            ; total += arr[index]
-    INX                  ; index++
-    JMP loop_start
-loop_end:
-    RTS                  ; total in A
-```
-
-This generates the same code a hand-written assembly programmer would write -- no spilling to memory, no redundant loads.
 
 ---
 
@@ -733,7 +497,7 @@ fn main() -> ! {
             update_game();
         } else if STATE == GameState::Paused {
             update_pause();
-        } else if STATE == GameState::GameOver {
+        } else {
             update_game_over();
         }
 
@@ -789,7 +553,7 @@ fn copy_memory(src: *u8, dst: *u8, count @ X: u16) {
 
 ### Binary Search
 
-A binary search over a ROM lookup table, demonstrating nested control flow with early return:
+A binary search over a ROM lookup table with early return:
 
 ```rust
 fn binary_search(target @ A: u8) -> u8 {
@@ -809,6 +573,6 @@ fn binary_search(target @ A: u8) -> u8 {
         }
     }
 
-    return 0xFF;             // not found
+    return 0xFF;                // not found
 }
 ```

@@ -15,6 +15,7 @@ const sidebars = {
         'language/expressions',
         'language/statements',
         'language/control-flow',
+        'language/match-expressions',
         'language/functions',
         'language/structs',
         'language/enums',

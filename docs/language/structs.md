@@ -1,5 +1,5 @@
 ---
-sidebar_position: 7
+sidebar_position: 8
 title: "Structs"
 description: "R65 struct definitions, memory layout, and usage."
 ---
