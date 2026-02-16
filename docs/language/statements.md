@@ -37,14 +37,6 @@ let mut counter: u16 = 0;
 let mut temp: u8;           // uninitialized, must assign before use
 ```
 
-**Assembly mapping:**
-
-```rust
-let x: u8 = 10;
-// LDA #10
-// STA x           ; stack-relative or memory location
-```
-
 ### Register Alias Bindings
 
 A `let` binding with `@ Register` aliases the variable to a hardware register. The variable name becomes a zero-cost alias -- all reads and writes go directly to the register.
@@ -68,13 +60,6 @@ let name @ Register: Type = initializer;
 let value @ A = 10;             // value aliases A, inferred u8 in m8 mode
 let index @ X = 0;              // index aliases X, inferred u16
 let hitpoints @ A = PLAYER.health;  // A holds hitpoints
-```
-
-**Assembly mapping:**
-
-```rust
-let value @ A = 10;
-// LDA #10          ; value IS the A register
 ```
 
 Register aliases have zero runtime cost -- no memory allocation occurs. The variable name is a compile-time alias for the register.
@@ -132,14 +117,6 @@ player.health = 100;
 *ptr = 5;
 ```
 
-**Assembly mapping:**
-
-```rust
-x = 10;
-// LDA #10
-// STA x
-```
-
 ### Compound Assignment
 
 Compound assignment operators combine a binary operation with assignment.
@@ -171,18 +148,6 @@ flags &= 0x0F;
 value <<= 2;
 ```
 
-**Assembly mapping:**
-
-```rust
-counter += 1;
-// INC counter       ; optimized to INC for += 1
-
-flags &= 0x0F;
-// LDA flags
-// AND #$0F
-// STA flags
-```
-
 ### Increment and Decrement
 
 Postfix `++` and `--` operators increment or decrement a value by one.
@@ -209,16 +174,6 @@ X--;
 buffer[i]++;
 player.health--;
 ```
-
-**Assembly mapping for hardware registers:**
-
-```rust
-X++;    // INX     (2 cycles)
-Y--;    // DEY     (2 cycles)
-A++;    // INC A   (2 cycles)
-```
-
-For memory variables, generates `INC addr` or `DEC addr` when possible.
 
 ### Multiple Assignment
 
@@ -254,21 +209,17 @@ if condition {
 - The condition must evaluate to `bool` or a comparable expression.
 - The body executes only when the condition is true.
 
-**Assembly mapping:**
+**Examples:**
 
 ```rust
 if x > 10 {
     process();
 }
-// LDA x
-// CMP #10
-// BCC skip         ; branch if x <= 10 (inverted condition)
-// BEQ skip
-// JSR process
-// skip:
-```
 
-The compiler generates inverted branch conditions as its default strategy, avoiding an extra JMP instruction.
+if (flags & 0x80) != 0 {
+    handle_error();
+}
+```
 
 ### If-Else
 
@@ -282,7 +233,7 @@ if condition {
 }
 ```
 
-**Assembly mapping:**
+**Examples:**
 
 ```rust
 if health == 0 {
@@ -290,13 +241,6 @@ if health == 0 {
 } else {
     continue_game();
 }
-// LDA health
-// BNE else_block
-// JSR game_over
-// JMP end
-// else_block:
-// JSR continue_game
-// end:
 ```
 
 ### If-Else If-Else Chain
@@ -315,7 +259,7 @@ if condition1 {
 
 Any number of `else if` clauses may appear. The final `else` is optional for statements (but required for if-as-expression; see below).
 
-**Assembly mapping:**
+**Examples:**
 
 ```rust
 if x < 10 {
@@ -325,23 +269,6 @@ if x < 10 {
 } else {
     category = 2;
 }
-// LDA x
-// CMP #10
-// BCS check2
-// LDA #0
-// STA category
-// JMP end
-// check2:
-// LDA x
-// CMP #20
-// BCS else_block
-// LDA #1
-// STA category
-// JMP end
-// else_block:
-// LDA #2
-// STA category
-// end:
 ```
 
 ### If-Else as Expression
@@ -437,17 +364,6 @@ loop {
 - Must use `break` to exit or `return` to exit the enclosing function.
 - The primary pattern for main game loops and event loops.
 
-**Assembly mapping:**
-
-```rust
-loop {
-    update();
-}
-// loop_start:
-// JSR update
-// JMP loop_start
-```
-
 **Examples:**
 
 ```rust
@@ -485,20 +401,17 @@ while condition {
 - If the condition is initially false, the body never executes.
 - The loop exits when the condition becomes false.
 
-**Assembly mapping:**
+**Examples:**
 
 ```rust
 while count > 0 {
     process();
     count -= 1;
 }
-// loop_start:
-// LDA count
-// BEQ loop_end
-// JSR process
-// DEC count
-// JMP loop_start
-// loop_end:
+
+while !ready {
+    wait();
+}
 ```
 
 ### For Loop (Range-Based)
@@ -531,25 +444,6 @@ while i < end {
     // body
     i = i + 1;
 }
-```
-
-**Assembly mapping:**
-
-```rust
-for i in 0..10 {
-    process(i);
-}
-// LDA #0
-// STA i
-// loop_start:
-// LDA i
-// CMP #10
-// BCS loop_end
-// LDA i
-// JSR process
-// INC i
-// JMP loop_start
-// loop_end:
 ```
 
 **Examples:**
@@ -673,25 +567,6 @@ break 'label value;  // only inside labeled loop expressions
 - Using `break` outside any loop is a compile error.
 - Using `break 'label` with a label that does not refer to an enclosing loop is a compile error.
 
-**Assembly mapping:**
-
-```rust
-loop {
-    if ready {
-        break;
-    }
-    wait();
-}
-// loop_start:
-// LDA ready
-// BEQ not_ready
-// JMP loop_end       ; break
-// not_ready:
-// JSR wait
-// JMP loop_start
-// loop_end:
-```
-
 ---
 
 ## Continue
@@ -710,34 +585,6 @@ continue 'label;
   - For `loop`, this jumps to the top of the loop body.
 - `continue 'label;` targets the labeled loop.
 - Using `continue` outside any loop is a compile error.
-
-**Assembly mapping:**
-
-```rust
-while index < 10 {
-    if skip_table[index] {
-        index += 1;
-        continue;
-    }
-    process(index);
-    index += 1;
-}
-// loop_start:
-// LDA index
-// CMP #10
-// BCS loop_end
-// LDX index
-// LDA skip_table,X
-// BEQ not_skipped
-// INC index
-// JMP loop_start     ; continue
-// not_skipped:
-// LDA index
-// JSR process
-// INC index
-// JMP loop_start
-// loop_end:
-```
 
 ---
 
@@ -773,7 +620,7 @@ fn get_status() -> u8 {
 
 ### Never-Returning Functions
 
-Functions annotated with `-> !` never return to their caller. The compiler omits `RTS`/`RTL` and emits `WAI` as a safety fallback if control flow unexpectedly reaches the end.
+Functions annotated with `-> !` never return to their caller.
 
 ```rust
 #[entry]
@@ -786,7 +633,9 @@ fn main() -> ! {
 }
 ```
 
-**Assembly mapping:**
+### Early Return
+
+`return` can appear anywhere in the function body to exit early:
 
 ```rust
 fn validate(input @ A: u8) -> u8 {
@@ -795,13 +644,6 @@ fn validate(input @ A: u8) -> u8 {
     }
     return input;
 }
-// CMP #0
-// BNE not_zero
-// LDA #$FF
-// RTS              ; early return
-// not_zero:
-// ; A still holds input
-// RTS
 ```
 
 ---
@@ -810,7 +652,7 @@ fn validate(input @ A: u8) -> u8 {
 
 ### Basic Match
 
-The `match` expression tests a scrutinee against a sequence of patterns and executes the first matching arm.
+The `match` expression tests a scrutinee against a sequence of patterns and executes the first matching arm. See [Match Expressions](./match-expressions.md) for the full reference.
 
 **Syntax:**
 
@@ -986,56 +828,6 @@ match state {
 }
 ```
 
-### Optimization
-
-The compiler automatically selects the optimal code generation strategy:
-
-- **Lookup table**: When patterns form a dense range and all arm bodies are compile-time constants, the compiler emits an inline ROM table for O(1) lookup.
-- **Jump table**: When patterns are dense but arm bodies are not constant, the compiler emits an indexed jump table (`JMP (addr,X)`) for O(1) dispatch.
-- **Branch chain**: For sparse patterns or a small number of arms, the compiler emits sequential comparisons.
-
-Range patterns are expanded to individual values for density analysis and can trigger table optimizations. Or-patterns (`a | b`) currently fall back to branch chains.
-
-**Assembly mapping (branch chain):**
-
-```rust
-match val {
-    0 => handle_zero(),
-    1 => handle_one(),
-    _ => handle_other(),
-}
-// CMP #0
-// BNE _check_1
-// JSR handle_zero
-// JMP _merge
-// _check_1:
-// CMP #1
-// BNE _default
-// JSR handle_one
-// JMP _merge
-// _default:
-// JSR handle_other
-// _merge:
-```
-
-**Assembly mapping (range pattern):**
-
-```rust
-match val {
-    0..=15 => handle_low(),
-    _ => handle_high(),
-}
-// CMP #0
-// BCC _default
-// CMP #16
-// BCS _default
-// JSR handle_low
-// JMP _merge
-// _default:
-// JSR handle_high
-// _merge:
-```
-
 ---
 
 ## Short-Circuit Evaluation
@@ -1050,17 +842,7 @@ The right operand is evaluated only if the left operand is true.
 if check_a() && check_b() {
     execute();
 }
-```
-
-**Assembly mapping:**
-
-```rust
-// JSR check_a
-// BEQ skip           ; if false, skip second check
-// JSR check_b
-// BEQ skip
-// JSR execute
-// skip:
+// check_b() only called if check_a() returns true
 ```
 
 ### Logical OR (`||`)
@@ -1071,55 +853,22 @@ The right operand is evaluated only if the left operand is false.
 if quick_check() || slow_check() {
     execute();
 }
-```
-
-**Assembly mapping:**
-
-```rust
-// JSR quick_check
-// BNE do_execute      ; if true, skip second check
-// JSR slow_check
-// BEQ skip
-// do_execute:
-// JSR execute
-// skip:
+// slow_check() only called if quick_check() returns false
 ```
 
 ### Chained Conditions
 
-Multiple `&&` conditions generate a cascade of early-exit branches:
+Multiple conditions can be chained:
 
 ```rust
 if a && b && c {
     execute();
 }
-// LDA a
-// BEQ skip
-// LDA b
-// BEQ skip
-// LDA c
-// BEQ skip
-// JSR execute
-// skip:
+
+if has_powerup || health > 50 || is_invincible {
+    allow_action();
+}
 ```
-
----
-
-## Branch Distance Handling
-
-The 65816 conditional branch instructions (`BEQ`, `BNE`, `BCC`, `BCS`, `BMI`, `BPL`, `BVC`, `BVS`) have a limited range of +/-127 bytes. The compiler transparently handles cases where a branch target is out of range by inverting the condition and using a `JMP`:
-
-```
-; Original (target too far):
-    BEQ far_target
-
-; Compiler rewrites to:
-    BNE __branch_skip_0     ; inverted condition, nearby
-    JMP far_target          ; JMP has no range limit
-__branch_skip_0:
-```
-
-This fixup is automatic and invisible to the programmer. Write control flow naturally and the compiler handles long branches.
 
 ---
 
