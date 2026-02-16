@@ -1,5 +1,5 @@
 ---
-sidebar_position: 5
+sidebar_position: 6
 title: Functions
 description: R65 function declarations, calling conventions, parameter passing, and cross-bank calls.
 ---

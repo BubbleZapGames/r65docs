@@ -1,5 +1,5 @@
 ---
-sidebar_position: 8
+sidebar_position: 9
 title: "Traits"
 description: "R65 trait definitions, implementations, and TypeId-based dynamic dispatch."
 ---
