@@ -1,0 +1,71 @@
+.playground {
+  display: flex;
+  flex-direction: column;
+  /* Fill viewport minus navbar height */
+  height: calc(100vh - 60px);
+  overflow: hidden;
+}
+
+.panels {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.editorPane,
+.outputPane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--ifm-background-color);
+}
+
+.paneHeader {
+  padding: 0.35rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ifm-font-color-secondary);
+  background: var(--ifm-background-surface-color, #16213e);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+}
+
+.paneContent {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: calc(100vh - 60px);
+  color: var(--ifm-font-color-secondary);
+  font-size: 1.1rem;
+}
+
+/* Mobile: stack vertically */
+@media (max-width: 768px) {
+  .panels {
+    flex-direction: column;
+  }
+
+  .editorPane {
+    flex: 3;
+  }
+
+  .outputPane {
+    flex: 2;
+  }
+}
+
+/* Hide Docusaurus footer on playground page */
+:global(.playground-page .footer) {
+  display: none;
+}

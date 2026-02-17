@@ -25,6 +25,25 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Checkout R65 compiler
+        uses: actions/checkout@v4
+        with:
+          repository: BubbleZapGames/R65
+          path: r65-compiler
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build R65 wheel
+        run: |
+          cd r65-compiler
+          pip install wheel
+          python setup.py bdist_wheel
+          mkdir -p ../static/pyodide
+          cp dist/r65-*.whl ../static/pyodide/
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:

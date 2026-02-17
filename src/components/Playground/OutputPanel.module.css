@@ -1,0 +1,43 @@
+.panel {
+  height: 100%;
+  overflow: auto;
+  background: var(--ifm-background-surface-color, #16213e);
+  border-radius: 4px;
+}
+
+.output {
+  margin: 0;
+  padding: 1rem;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--ifm-font-color-base);
+  background: transparent;
+  border: none;
+}
+
+.muted {
+  opacity: 0.5;
+}
+
+.errorText {
+  color: #e74c3c;
+}
+
+.hintText {
+  color: #3498db;
+}
+
+.warningText {
+  color: #f39c12;
+}
+
+.locationText {
+  color: #7f8c8d;
+}
+
+.sourceLine {
+  color: #95a5a6;
+}

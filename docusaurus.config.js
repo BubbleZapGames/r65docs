@@ -59,6 +59,11 @@ const config = {
             label: 'Docs',
           },
           {
+            to: '/playground',
+            label: 'Playground',
+            position: 'left',
+          },
+          {
             href: 'https://github.com/BubbleZapGames/r65docs',
             label: 'GitHub',
             position: 'right',
