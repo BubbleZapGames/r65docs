@@ -63,6 +63,22 @@ struct U32 {
 
 All methods use `impl far` with a `far *self` pointer. Operations modify the value in place.
 
+### Literal Initialization
+
+The `U32!` macro initializes a U32 from a compile-time constant, automatically splitting it into `lo`/`hi` halves:
+
+```rust
+#[ram] static mut SCORE: U32 = U32!(100000);   // lo=0x86A0, hi=0x0001
+#[ram] static mut MAX: U32 = U32!(0xFFFFFFFF);  // lo=0xFFFF, hi=0xFFFF
+#[ram] static mut ZERO: U32 = U32!(0);          // lo=0x0000, hi=0x0000
+```
+
+This is equivalent to writing the struct literal manually:
+
+```rust
+#[ram] static mut SCORE: U32 = U32 { lo: 0x86A0, hi: 0x0001 };
+```
+
 ### Conversion
 
 | Method | Signature | Description |
@@ -115,6 +131,16 @@ struct I32 {
 ```
 
 Range: `-2,147,483,648` to `2,147,483,647`.
+
+### Literal Initialization
+
+The `I32!` macro initializes an I32 from a compile-time constant, handling two's complement automatically:
+
+```rust
+#[ram] static mut OFFSET: I32 = I32!(-42);      // lo=0xFFD6, hi=0xFFFF
+#[ram] static mut GRAVITY: I32 = I32!(-256);     // lo=0xFF00, hi=0xFFFF
+#[ram] static mut POSITIVE: I32 = I32!(1000);    // lo=0x03E8, hi=0x0000
+```
 
 ### Conversion
 
@@ -170,7 +196,7 @@ Available only with `#[cfg(snes)]`.
 ### Basic Arithmetic
 
 ```rust
-#[ram] static mut SCORE: U32;
+#[ram] static mut SCORE: U32 = U32!(0);
 #[ram] static mut POINTS: U32;
 
 fn add_points(amount @ X: u16) {
@@ -182,9 +208,9 @@ fn add_points(amount @ X: u16) {
 ### Signed Computation
 
 ```rust
-#[ram] static mut VELOCITY: I32;
-#[ram] static mut GRAVITY: I32;
-#[ram] static mut POSITION: I32;
+#[ram] static mut VELOCITY: I32 = I32!(0);
+#[ram] static mut GRAVITY: I32 = I32!(-256);
+#[ram] static mut POSITION: I32 = I32!(0);
 
 fn apply_gravity() {
     VELOCITY.add(&GRAVITY);
