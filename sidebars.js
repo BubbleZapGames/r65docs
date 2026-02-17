@@ -39,6 +39,7 @@ const sidebars = {
       items: [
         'platform/snes-rom-header',
         'platform/register-allocation',
+        'platform/math',
       ],
     },
   ],
