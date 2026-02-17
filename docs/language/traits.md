@@ -1,5 +1,5 @@
 ---
-sidebar_position: 10
+sidebar_position: 9
 title: "Traits"
 description: "R65 trait definitions, implementations, and TypeId-based dynamic dispatch."
 ---
@@ -34,8 +34,6 @@ trait Updatable {
 }
 ```
 
-Near trait dispatch uses a jump table with 2-byte entries per TypeId.
-
 ### Far Traits
 
 For cross-bank dispatch, declare all methods with `far fn`. Far traits use the JSL/RTL calling convention:
@@ -46,8 +44,6 @@ trait Renderable {
     far fn get_bank(*self) -> u8;
 }
 ```
-
-Far trait dispatch uses a JML trampoline with 4-byte entries per TypeId.
 
 ### Near/Far Exclusivity
 
@@ -159,40 +155,33 @@ When a struct instance is created (via struct literal or static initialization),
 
 ```rust
 let p = Player { x: 10, y: 20 };
-// Generated: store TypeId at offset 0, then x at offset 1, y at offset 2
 ```
 
 ## Trait Pointers
 
+Trait pointers use the `*dyn TraitName` syntax. The `dyn` keyword distinguishes a dynamic dispatch pointer (where the concrete type is not statically known) from a plain struct pointer.
+
 ### Near Trait Pointer
 
-A near trait pointer is 2 bytes and uses the current data bank register for addressing:
-
 ```rust
-let obj: *Drawable = &player;
+let obj: *dyn Drawable = &player as *dyn Drawable;
 ```
 
 ### Far Trait Pointer
 
-A far trait pointer is 3 bytes and includes a bank byte for full 24-bit addressing:
-
 ```rust
-let obj: far *Renderable = &sprite;
+let obj: far *dyn Renderable = &sprite as far *dyn Renderable;
 ```
 
 ### Creating Trait Pointers
 
-A pointer to a concrete struct can be assigned to a trait pointer if the struct implements the trait. The coercion is implicit:
+A concrete struct pointer is coerced to a trait pointer with an explicit `as *dyn Trait` cast:
 
 ```rust
 #[ram]
 static mut PLAYER: Player;
 
-// Implicit coercion from *Player to *Drawable
-let d: *Drawable = &PLAYER;
-
-// Explicit cast also works
-let d: *Drawable = &PLAYER as *Drawable;
+let d: *dyn Drawable = &PLAYER as *dyn Drawable;
 ```
 
 ### Null Trait Pointers
@@ -200,10 +189,33 @@ let d: *Drawable = &PLAYER as *Drawable;
 Null is represented as address zero. Check manually before dispatching:
 
 ```rust
-let target: *Drawable = 0 as *Drawable;
+let target: *dyn Drawable = 0 as *dyn Drawable;
 
-if target != 0 as *Drawable {
+if target != 0 as *dyn Drawable {
     target.draw(X, Y);
+}
+```
+
+### Trait Pointers as Function Parameters
+
+`*dyn Trait` can be passed as a regular stack parameter to any function, including trait methods themselves. This lets implementations receive an opaque object and inspect it at runtime:
+
+```rust
+trait Collidable {
+    fn collides(*self, other: *dyn Collidable) -> u8;
+}
+```
+
+Inside the implementation use `type_id()` to identify the concrete type before casting:
+
+```rust
+impl Collidable for Rect {
+    fn collides(*self, other: *dyn Collidable) -> u8 {
+        if other.type_id() == Rect::TYPE_ID {
+            return collides_with_rect(self, other as *Rect);
+        }
+        return 0;
+    }
 }
 ```
 
@@ -212,13 +224,13 @@ if target != 0 as *Drawable {
 ```rust
 // Array of trait pointers
 #[ram]
-static mut ENTITIES: [*Drawable; 32];
+static mut ENTITIES: [*dyn Drawable; 32];
 
 // Struct containing a trait pointer
 struct Projectile {
     x: u8,
     y: u8,
-    target: *Damageable
+    target: *dyn Damageable
 }
 ```
 
@@ -234,18 +246,18 @@ static mut PLAYER: Player;
 static mut ENEMY: Enemy;
 
 #[ram]
-static mut CURRENT_TARGET: *Drawable = &PLAYER;
+static mut CURRENT_TARGET: *dyn Drawable = &PLAYER as *dyn Drawable;
 
 #[ram]
-static mut DRAW_LIST: [*Drawable; 4] = [
-    &PLAYER,
-    &ENEMY,
-    0 as *Drawable,
-    0 as *Drawable
+static mut DRAW_LIST: [*dyn Drawable; 4] = [
+    &PLAYER as *dyn Drawable,
+    &ENEMY  as *dyn Drawable,
+    0 as *dyn Drawable,
+    0 as *dyn Drawable
 ];
 ```
 
-The target must be a `static` or `static mut` variable. The `&` operator on a static yields a compile-time address. Type coercion from `*ConcreteType` to `*Trait` happens implicitly.
+The target must be a `static` or `static mut` variable. The `&` operator on a static yields a compile-time address.
 
 ## Method Dispatch
 
@@ -254,76 +266,22 @@ The target must be a `static` or `static mut` variable. The `&` operator on a st
 Call trait methods on trait pointers using dot notation:
 
 ```rust
-let obj: *Drawable = &player;
+let obj: *dyn Drawable = &player as *dyn Drawable;
 obj.draw(X, Y);
 let w: u8 = obj.get_width();
 ```
 
-### Dispatch Mechanism
-
-1. Load the TypeId byte from offset 0 of the object.
-2. Use the TypeId to index into the trait's per-method jump table.
-3. Jump to the correct implementation.
-
-### Near Dispatch (Jump Table)
-
-The compiler generates one jump table per trait method:
-
-```
-Drawable__draw_table:
-    .dw _trait_error        ; TypeId 0 (invalid)
-    .dw Player__draw        ; TypeId 1
-    .dw Enemy__draw         ; TypeId 2
-    .dw Bullet__draw        ; TypeId 3
-```
-
-Dispatch code:
-
-```
-    LDA (obj)               ; Load TypeId
-    ASL A                   ; Multiply by 2 (16-bit table entries)
-    TAX
-    JMP (Drawable__draw_table,X)
-```
-
-**Cost**: approximately 10-12 cycles overhead per dispatch (on top of the method body itself).
-
-### Far Dispatch (JML Trampoline)
-
-For far traits, the compiler generates a JML trampoline:
-
-```
-Renderable__render_trampoline:
-    JML _trait_error        ; TypeId 0 (4 bytes)
-    JML Sprite__render      ; TypeId 1 (4 bytes)
-    JML Enemy__render       ; TypeId 2 (4 bytes)
-```
-
-Dispatch code loads the TypeId, multiplies by 4 (the size of a JML instruction), and jumps into the trampoline.
-
-**Cost**: approximately 20-25 cycles overhead per dispatch.
-
-### Dispatch Cost Comparison
-
-| Call Type | Overhead |
-|-----------|----------|
-| Direct near call (`JSR`/`RTS`) | ~12 cycles |
-| Near trait dispatch | ~10-12 cycles + 12 cycles call |
-| Direct far call (`JSL`/`RTL`) | ~14 cycles |
-| Far trait dispatch | ~20-25 cycles + 14 cycles call |
 
 ## Type Introspection
 
 ### type_id() Method
 
-The `type_id()` method is available on any trait pointer. It returns the `__type_id` byte:
+The `type_id()` method is available on any `*dyn Trait` pointer. It returns the `__type_id` byte stored at offset 0 of the object:
 
 ```rust
-let obj: *Drawable = &player;
+let obj: *dyn Drawable = &player as *dyn Drawable;
 let id: u8 = obj.type_id();  // Returns Player's TypeId (e.g., 1)
 ```
-
-This compiles to a single indirect load from offset 0 of the object.
 
 ### TYPE_ID Constants
 
@@ -340,7 +298,7 @@ Bullet::TYPE_ID     // e.g., 3
 Compare `type_id()` against `TYPE_ID` constants to safely downcast from a trait pointer to a concrete type:
 
 ```rust
-fn handle_collision(obj: *Drawable) {
+fn handle_collision(obj: *dyn Drawable) {
     if obj.type_id() == Player::TYPE_ID {
         let player: *Player = obj as *Player;
         player.health = player.health - 10;
@@ -391,7 +349,7 @@ Associated constants are accessed via the **concrete type**, not through trait p
 let w: u8 = Player::WIDTH;   // OK: compile-time resolved
 let h: u8 = Bullet::HEIGHT;  // OK
 
-let obj: *Drawable = &player;
+let obj: *dyn Drawable = &player as *dyn Drawable;
 let w: u8 = obj.WIDTH;       // ERROR: cannot access through trait pointer
 ```
 
@@ -409,34 +367,7 @@ impl Drawable for Player {
 }
 ```
 
-## Self Pointer Dispatch Mechanism
-
-Trait methods receive the `self` pointer in the Y register with DBR set to the object's bank. This enables efficient field access:
-
-```rust
-impl Drawable for Player {
-    fn draw(*self, x @ X: u16, y @ Y: u16) {
-        // self.sprite_id compiles to: LDA offset,Y
-        // where Y holds the self pointer and DBR is set to the object's bank
-    }
-}
-```
-
-Field access through `*self` costs approximately 5 cycles (`LDA $offset,Y`), compared to approximately 10 cycles for stack-relative indirect addressing.
-
-## Memory Considerations
-
-### Table Size
-
-| Component | Size |
-|-----------|------|
-| Near jump table entry | 2 bytes per TypeId |
-| Far trampoline entry | 4 bytes per TypeId |
-| TypeId per instance | 1 byte |
-
-Example: 10 types implementing `Drawable` with 3 methods produces 3 jump tables of 11 entries (TypeId 0 through 10) at 2 bytes each = 66 bytes of ROM.
-
-### TypeId Limits
+## TypeId Limits
 
 The maximum number of distinct struct types with trait implementations is 255 (TypeId 0 is reserved for null/invalid).
 
@@ -451,6 +382,8 @@ The maximum number of distinct struct types with trait implementations is 255 (T
 7. **No self by value**: All trait methods must take `*self` (a pointer).
 
 ## Complete Example
+
+### Entity Draw List
 
 ```rust
 trait Drawable {
@@ -495,7 +428,7 @@ static mut PLAYER: Player;
 static mut ENEMIES: [Enemy; 8];
 
 #[ram]
-static mut DRAW_LIST: [*Drawable; 16];
+static mut DRAW_LIST: [*dyn Drawable; 16];
 
 fn game_update() {
     // Update all entities
@@ -506,10 +439,88 @@ fn game_update() {
 
     // Draw all entities via trait dispatch
     for i in 0..16 {
-        let d: *Drawable = DRAW_LIST[i];
-        if d != 0 as *Drawable {
+        let d: *dyn Drawable = DRAW_LIST[i];
+        if d != 0 as *dyn Drawable {
             d.draw(X, Y);
         }
     }
 }
 ```
+
+### Pairwise Collision with `type_id()` and Downcast
+
+This example shows a heterogeneous object list, `type_id()` for type checking, and downcasting inside a trait method that accepts a `*dyn Trait` parameter.
+
+```rust
+struct Rect { x: u8, y: u8, w: u8, h: u8 }
+
+trait Collidable {
+    fn collides(*self, other: *dyn Collidable) -> u8;
+}
+
+// Plain helper - no trait dispatch overhead
+fn collides_with_rect(a: *Rect, b: *Rect) -> u8 {
+    if a.x < b.x + b.w {
+        if b.x < a.x + a.w {
+            if a.y < b.y + b.h {
+                if b.y < a.y + a.h {
+                    return 1;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+impl Collidable for Rect {
+    fn collides(*self, other: *dyn Collidable) -> u8 {
+        // Check the concrete type of 'other' at runtime
+        if other.type_id() == Rect::TYPE_ID {
+            return collides_with_rect(self, other as *Rect);
+        }
+        return 0;  // Unknown type - no collision
+    }
+}
+
+#[lowram]
+static mut rects: [Rect; 3] = [
+    Rect { x: 10, y: 10, w: 20, h: 20 },
+    Rect { x: 25, y: 15, w: 15, h: 10 },
+    Rect { x: 50, y: 50, w: 10, h: 10 },
+];
+
+#[lowram]
+static mut ptrs: [*dyn Collidable; 3];
+
+#[lowram]
+static mut RESULT: [u8; 3] = [0, 0, 0];
+
+#[entry]
+fn main() {
+    // Build the heterogeneous trait-pointer array
+    ptrs[0] = &rects[0] as *dyn Collidable;
+    ptrs[1] = &rects[1] as *dyn Collidable;
+    ptrs[2] = &rects[2] as *dyn Collidable;
+
+    // Pairwise collision detection
+    for i in 0..ptrs.len() {
+        let pi: *dyn Collidable = ptrs[i];
+        for j in i+1..ptrs.len() {
+            let pj: *dyn Collidable = ptrs[j];
+            if pi.collides(pj) != 0 {
+                RESULT[i] = 1;
+                RESULT[j] = 1;
+                break;
+            }
+        }
+    }
+    // RESULT = [1, 1, 0] — rects 0 and 1 overlap; rect 2 is isolated
+}
+```
+
+Key points from this example:
+
+- `*dyn Collidable` is used for both the array element type and the `other` parameter type.
+- `other.type_id()` reads the `__type_id` byte at offset 0 through the trait pointer.
+- `Rect::TYPE_ID` is a compile-time constant.
+- `other as *Rect` is a zero-cost reinterpret cast — the address is unchanged; only the static type changes. `self` is already `*Rect` inside `impl Collidable for Rect` and needs no cast.

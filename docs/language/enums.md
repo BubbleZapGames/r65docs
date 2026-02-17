@@ -1,5 +1,5 @@
 ---
-sidebar_position: 9
+sidebar_position: 10
 title: "Enums"
 description: "R65 enum definitions, representation, and usage."
 ---
@@ -96,36 +96,7 @@ let action: u8 = match dir {
 
 When all variants are covered, no wildcard `_` arm is required.
 
-## No Data-Carrying Variants
+### Notes:
 
-R65 enums do not support Rust-style data-carrying variants (sum types):
+* R65 enums do not support Rust-style data-carrying variants (sum types):
 
-```rust
-// NOT supported:
-enum Message {
-    Quit,
-    Move { x: u8, y: u8 },  // ERROR: no data-carrying variants
-    Text(String),             // ERROR
-}
-```
-
-Use structs with a tag field for similar patterns:
-
-```rust
-enum MessageType { Quit = 0, Move = 1 }
-
-struct MoveData { msg_type: MessageType, x: u8, y: u8 }
-```
-
-## Pass-by-Reference Note
-
-Enums are small integer values and can be used freely in expressions, assignments, and as function parameters. They do not have the pass-by-reference restriction that applies to [structs](structs.md).
-
-```rust
-fn handle_direction(dir @ A: u8) {
-    // Compare against enum values
-    if dir == Direction::North as u8 {
-        move_up();
-    }
-}
-```
