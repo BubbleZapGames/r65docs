@@ -96,6 +96,11 @@ This is equivalent to writing the struct literal manually:
 | `mul` | `(far *self, other: far *U32)` | `self *= other` (32x32, low 32 bits kept) |
 | `div` | `(far *self, other: far *U32)` | `self /= other` (returns `0xFFFFFFFF` on divide by zero) |
 | `mod` | `(far *self, other: far *U32)` | `self %= other` (unchanged on divide by zero) |
+| `add_u16` | `(far *self, value @ A: u16)` | `self += value` (u16 operand, zero-extends) |
+| `sub_u16` | `(far *self, value @ A: u16)` | `self -= value` (u16 operand, zero-extends) |
+| `mul_u16` | `(far *self, value @ A: u16)` | `self *= value` (u16 operand, low 32 bits kept) |
+| `div_u16` | `(far *self, value @ A: u16)` | `self /= value` (u16 operand; returns `0xFFFFFFFF` on divide by zero) |
+| `mod_u16` | `(far *self, value @ A: u16)` | `self %= value` (u16 operand, zero-extends; unchanged on divide by zero) |
 
 ### Comparison
 
@@ -168,6 +173,11 @@ The `I32!` macro initializes an I32 from a compile-time constant, handling two's
 | `mul` | `(far *self, other: far *I32)` | `self *= other` (signed, low 32 bits kept) |
 | `div` | `(far *self, other: far *I32)` | `self /= other` (rounds toward zero; returns `MIN_I32` on divide by zero) |
 | `mod` | `(far *self, other: far *I32)` | `self %= other` (remainder sign matches dividend; unchanged on divide by zero) |
+| `add_i16` | `(far *self, value @ A: u16)` | `self += value` (i16 operand, sign-extends) |
+| `sub_i16` | `(far *self, value @ A: u16)` | `self -= value` (i16 operand, sign-extends) |
+| `mul_i16` | `(far *self, value @ A: u16)` | `self *= value` (i16 operand, low 32 bits kept) |
+| `div_i16` | `(far *self, value @ A: u16)` | `self /= value` (i16 operand; returns `MIN_I32` on divide by zero) |
+| `mod_i16` | `(far *self, value @ A: u16)` | `self %= value` (i16 operand, sign-extends; unchanged on divide by zero) |
 
 ### Comparison
 
@@ -197,11 +207,14 @@ Available only with `#[cfg(snes)]`.
 
 ```rust
 #[ram] static mut SCORE: U32 = U32!(0);
-#[ram] static mut POINTS: U32;
+#[ram] static mut BONUS: U32 = U32!(10000);
 
-fn add_points(amount @ X: u16) {
-    POINTS.from_u16(amount);
-    SCORE.add(&POINTS);
+fn add_points(amount @ A: u16) {
+    SCORE.add_u16(amount);
+}
+
+fn award_bonus() {
+    SCORE.add(&BONUS);
 }
 ```
 
@@ -209,11 +222,10 @@ fn add_points(amount @ X: u16) {
 
 ```rust
 #[ram] static mut VELOCITY: I32 = I32!(0);
-#[ram] static mut GRAVITY: I32 = I32!(-256);
-#[ram] static mut POSITION: I32 = I32!(0);
+#[ram] static mut POSITION: I32 = I32!(10000);
 
 fn apply_gravity() {
-    VELOCITY.add(&GRAVITY);
+    VELOCITY.add_i16(-256);
     POSITION.add(&VELOCITY);
 }
 
@@ -225,12 +237,14 @@ fn reverse_direction() {
 ### Comparison and Branching
 
 ```rust
-#[ram] static mut A_VAL: U32;
-#[ram] static mut B_VAL: U32;
+#[ram] static mut PLAYER_SCORE: U32 = U32!(0);
+#[ram] static mut HIGH_SCORE: U32 = U32!(100000);
 
-fn is_greater(result @ A: u8) -> u8 {
-    let cmp_result @ A = A_VAL.cmp(&B_VAL);
+fn check_high_score(result @ A: u8) -> u8 {
+    let cmp_result @ A = PLAYER_SCORE.cmp(&HIGH_SCORE);
     if cmp_result == 1 {
+        // New high score!
+        HIGH_SCORE.copy(&PLAYER_SCORE);
         return 1;
     }
     return 0;
@@ -240,37 +254,94 @@ fn is_greater(result @ A: u8) -> u8 {
 ### Converting Between Sizes
 
 ```rust
-#[ram] static mut BIG: I32;
+#[ram] static mut TOTAL_DAMAGE: I32 = I32!(0);
 
-fn load_and_clamp(input @ X: u16) {
-    BIG.from_i16(input as i16);
+fn apply_damage(amount @ X: u16) {
+    TOTAL_DAMAGE.from_i16(amount as i16);
 
-    // Use the low 16 bits after computation
-    let small @ A: u16 = BIG.to_i16() as u16;
+    // Clamp to u16 range for display
+    let display_damage @ A: u16 = TOTAL_DAMAGE.to_i16() as u16;
 }
 ```
 
-### Absolute Value and Sign Handling
+### Multiplication and Division
 
 ```rust
-#[ram] static mut DISTANCE: I32;
-#[ram] static mut TEMP: I32;
+#[ram] static mut TILE_OFFSET: U32;
 
-fn get_abs_distance(dx @ X: u16) {
-    DISTANCE.from_i16(dx as i16);
-    DISTANCE.abs();
+fn compute_tile_address(row @ A: u16) {
+    TILE_OFFSET.from_u16(row);
+    TILE_OFFSET.mul_u16(64);  // row * 64, handles overflow
 }
 ```
 
-### Multiplication with Overflow
+### Complete Example: Frame Counter and FPS Calculation
+
+This example demonstrates most U32/I32 features in a practical scenario — tracking elapsed frames and computing frames per second.
 
 ```rust
-#[ram] static mut RESULT: U32;
-#[ram] static mut FACTOR: U32;
+include!("lib/sneslib.r65")
+include!("lib/U32.r65")
 
-fn compute_tile_offset(row @ X: u16) {
-    RESULT.from_u16(row);
-    FACTOR.from_u16(64);
-    RESULT.mul(&FACTOR);  // row * 64, full 32-bit result
+const FRAMES_PER_SECOND: u16 = 60;
+const FRAMES_PER_MINUTE: u16 = 3600;  // 60 * 60
+
+// Frame counter starts at 0
+#[ram]
+static mut FRAME_COUNT: U32 = U32!(0);
+
+
+// NMI fires every frame (~60Hz)
+#[interrupt(nmi)]
+fn vblank_handler() {
+    FRAME_COUNT.add_u16(1);
+}
+
+// Calculate seconds elapsed since start
+fn get_elapsed_seconds(result @ A: u16) -> u16 {
+    let mut seconds_elapsed: U32;
+
+    // Copy frame count to avoid modifying it
+    seconds_elapsed.copy(&FRAME_COUNT);
+
+    // Divide by 60 to get seconds
+    seconds_elapsed.div_u16(FRAMES_PER_SECOND);
+
+    // Return as u16 (truncate if > 65535 seconds)
+    return seconds_elapsed.to_u16();
+}
+
+// Calculate minutes and remaining seconds
+fn get_time_display(minutes @ A: u16, seconds @ X: u16) -> u16, u16 {
+    let mut minutes_elapsed: U32;
+    let mut seconds_elapsed: U32;
+
+    // Calculate total minutes
+    minutes_elapsed.copy(&FRAME_COUNT);
+    minutes_elapsed.div_u16(FRAMES_PER_MINUTE);
+
+    // Calculate remaining seconds (frame_count / 60) % 60
+    seconds_elapsed.copy(&FRAME_COUNT);
+    seconds_elapsed.div_u16(FRAMES_PER_SECOND);
+    seconds_elapsed.mod_u16(FRAMES_PER_SECOND);
+
+    return minutes_elapsed.to_u16(), seconds_elapsed.to_u16();
+}
+
+// Check if a specific milestone frame has been reached
+fn check_milestone(milestone_frames: u16, result: u8) -> u8 {
+    let mut milestone: U32;
+    milestone.from_u16(milestone_frames);
+
+    let cmp = FRAME_COUNT.cmp(&milestone);
+    if cmp >= 0 {
+        return 1;  // Milestone reached
+    }
+    return 0;
+}
+
+// Reset frame counter for new level/session
+fn reset_timer() {
+    FRAME_COUNT.from_u16(0);
 }
 ```
