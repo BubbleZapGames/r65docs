@@ -385,7 +385,6 @@ R65 deliberately omits Rust features that do not map well to 8-bit/16-bit hardwa
 - **No error handling types** -- no `Result`, `Option`, or `panic!()`
 - **No closures or async/await** -- use function pointers
 - **No module system** -- use `include!()` for file organization
-- **No methods or `impl` blocks** -- use free functions with pointer parameters
 - **No `unsafe` keyword** -- all code has direct hardware access by default
 - **No bounds checking** -- array and pointer indexing is unchecked
 - **No string types or dynamic collections** -- use fixed-size arrays
