@@ -1,5 +1,18 @@
 export const EXAMPLES = [
   {
+    name: 'Buffer Fill',
+    description: 'Zero-overhead pointer + register parameter passing',
+    source: `fn fill(buffer @ X: *u8, value @ A: u8, count @ Y: u16) {
+    // buffer ptr in X, value in A, count in Y
+    // No stack overhead!
+    while count > 0 {
+        count--;
+        buffer[count] = value;
+    }
+}
+`,
+  },
+  {
     name: 'Hello Registers',
     description: 'Register binding and function basics',
     source: `// R65 Playground — Register binding example
