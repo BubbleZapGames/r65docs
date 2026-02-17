@@ -21,6 +21,7 @@ const sidebars = {
         'language/enums',
         'language/traits',
         'language/macros',
+        'language/attributes',
       ],
     },
     {
