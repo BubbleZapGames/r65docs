@@ -1,0 +1,205 @@
+<svg viewBox="0 0 700 450" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    text { font-family: 'SFMono-Regular', 'Cascadia Code', 'Consolas', monospace; }
+    .frame { opacity: 0; }
+    .sp-indicator { transition: transform 0.35s ease; }
+    .ct  { fill: #fff; font-size: 13px; text-anchor: middle; dominant-baseline: central; }
+    .rl  { fill: #64748b; font-size: 11px; dominant-baseline: central; stroke: #fff; stroke-width: 2; paint-order: stroke; }
+    .tt  { font-size: 15px; font-weight: bold; text-anchor: middle; fill: #334155; stroke: #fff; stroke-width: 4; paint-order: stroke; }
+    .sc  { font-size: 12px; text-anchor: middle; fill: #94a3b8; stroke: #fff; stroke-width: 2; paint-order: stroke; }
+    .an  { font-size: 13px; text-anchor: middle; fill: #475569; stroke: #fff; stroke-width: 3; paint-order: stroke; font-style: italic; }
+    .sp  { font-size: 12px; font-weight: bold; fill: #e74c3c; text-anchor: end; dominant-baseline: central; stroke: #fff; stroke-width: 2; paint-order: stroke; }
+    .bg  { font-size: 15px; font-weight: bold; fill: #fff; text-anchor: middle; dominant-baseline: central; }
+    .hdr { font-size: 13px; font-weight: bold; fill: #334155; stroke: #fff; stroke-width: 3; paint-order: stroke; }
+    .rv  { font-size: 14px; font-weight: bold; text-anchor: middle; dominant-baseline: central; }
+    .nav-btn { cursor: pointer; }
+    .nav-btn:hover .nav-bg { fill: rgba(148,163,184,0.55); }
+    .nav-btn.disabled { cursor: default; opacity: 0.3; pointer-events: none; }
+  </style>
+
+  <!-- Navigation controls -->
+  <g id="back-btn" class="nav-btn disabled" onclick="goBack()">
+    <rect class="nav-bg" x="10" y="10" width="30" height="30" rx="6" fill="rgba(148,163,184,0.35)"/>
+    <polygon points="30,16 30,34 18,25" fill="#475569"/>
+  </g>
+  <g id="fwd-btn" class="nav-btn" onclick="goForward()">
+    <rect class="nav-bg" x="45" y="10" width="30" height="30" rx="6" fill="rgba(148,163,184,0.35)"/>
+    <polygon points="52,16 52,34 64,25" fill="#475569"/>
+  </g>
+
+  <!-- Static elements: column headers and divider -->
+  <g>
+    <text x="170" y="90" class="hdr" text-anchor="middle">Stack</text>
+    <line x1="170" y1="96" x2="170" y2="100" stroke="#94a3b8" stroke-width="1"/>
+    <text x="500" y="90" class="hdr" text-anchor="middle">Registers</text>
+    <line x1="500" y1="96" x2="500" y2="100" stroke="#94a3b8" stroke-width="1"/>
+    <line x1="340" y1="80" x2="340" y2="300" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4,4"/>
+  </g>
+
+  <!-- Animated SP indicator (drawn at y=0, moved via translateY) -->
+  <g class="sp-indicator" style="transform: translateY(165px)">
+    <polygon points="58,-8 72,0 58,8" fill="#e74c3c"/>
+    <text x="53" y="0" class="sp">SP</text>
+  </g>
+
+  <!-- Step 1: Idle -->
+  <g class="frame" style="opacity:1">
+    <text x="350" y="30" class="tt">Idle — before call</text>
+    <text x="350" y="52" class="sc">1 / 7</text>
+    <!-- Stack -->
+    <rect x="80" y="150" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="170" y="165" class="ct">...</text>
+    <text x="272" y="165" class="rl">caller frame</text>
+    <!-- Register: dim -->
+    <rect x="430" y="120" width="140" height="36" rx="8" fill="#7f8c8d" stroke="#6c7a89" stroke-width="1.5" opacity="0.5"/>
+    <text x="500" y="138" class="rv" fill="#ccc">A = ?</text>
+    <text x="350" y="340" class="an">Register param a goes in A, stack param b pushed via PHA</text>
+  </g>
+
+  <!-- Step 2: PHA param b -->
+  <g class="frame">
+    <text x="350" y="30" class="tt">PHA param b</text>
+    <text x="350" y="52" class="sc">2 / 7</text>
+    <!-- Stack -->
+    <rect x="80" y="114" width="180" height="30" rx="4" fill="#2ecc71" stroke="#27ae60" stroke-width="1.5"/>
+    <text x="170" y="129" class="ct">b = 20</text>
+    <text x="272" y="129" class="rl">param b</text>
+    <rect x="80" y="150" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="170" y="165" class="ct">...</text>
+    <!-- Register: still dim -->
+    <rect x="430" y="120" width="140" height="36" rx="8" fill="#7f8c8d" stroke="#6c7a89" stroke-width="1.5" opacity="0.5"/>
+    <text x="500" y="138" class="rv" fill="#ccc">A = ?</text>
+    <text x="350" y="340" class="an">Stack parameter pushed via PHA</text>
+  </g>
+
+  <!-- Step 3: Load a into A -->
+  <g class="frame">
+    <text x="350" y="30" class="tt">Load a into A register</text>
+    <text x="350" y="52" class="sc">3 / 7</text>
+    <!-- Stack -->
+    <rect x="80" y="114" width="180" height="30" rx="4" fill="#2ecc71" stroke="#27ae60" stroke-width="1.5"/>
+    <text x="170" y="129" class="ct">b = 20</text>
+    <rect x="80" y="150" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="170" y="165" class="ct">...</text>
+    <!-- Register: A lights up -->
+    <rect x="430" y="120" width="140" height="36" rx="8" fill="#1abc9c" stroke="#16a085" stroke-width="2"/>
+    <text x="500" y="138" class="bg">A = 10</text>
+    <text x="572" y="122" class="rl">&#x2190; param a</text>
+    <text x="350" y="340" class="an">Register parameter loaded directly into A</text>
+  </g>
+
+  <!-- Step 4: Call -->
+  <g class="frame">
+    <text x="350" y="30" class="tt">Call: add(10, 20)</text>
+    <text x="350" y="52" class="sc">4 / 7</text>
+    <!-- Stack -->
+    <rect x="80" y="78" width="180" height="30" rx="4" fill="#3498db" stroke="#2980b9" stroke-width="1.5"/>
+    <text x="170" y="93" class="ct">return addr</text>
+    <text x="272" y="93" class="rl">pushed by call</text>
+    <rect x="80" y="114" width="180" height="30" rx="4" fill="#2ecc71" stroke="#27ae60" stroke-width="1.5"/>
+    <text x="170" y="129" class="ct">b = 20</text>
+    <rect x="80" y="150" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="170" y="165" class="ct">...</text>
+    <!-- Register: A still set -->
+    <rect x="430" y="120" width="140" height="36" rx="8" fill="#1abc9c" stroke="#16a085" stroke-width="2"/>
+    <text x="500" y="138" class="bg">A = 10</text>
+    <text x="350" y="340" class="an">Return address pushed, A carries param a</text>
+  </g>
+
+  <!-- Step 5: Callee executes + returns -->
+  <g class="frame">
+    <text x="350" y="30" class="tt">Callee executes + returns</text>
+    <text x="350" y="52" class="sc">5 / 7</text>
+    <!-- Stack -->
+    <rect x="80" y="78" width="180" height="30" rx="4" fill="#3498db" stroke="#2980b9" stroke-width="1.5"/>
+    <text x="170" y="93" class="ct">return addr</text>
+    <rect x="80" y="114" width="180" height="30" rx="4" fill="#2ecc71" stroke="#fff" stroke-width="2.5"/>
+    <text x="170" y="129" class="ct">b = 20</text>
+    <text x="272" y="129" class="rl">&#x2190; read</text>
+    <rect x="80" y="150" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="170" y="165" class="ct">...</text>
+    <!-- Register: A = result -->
+    <rect x="430" y="120" width="140" height="36" rx="8" fill="#1abc9c" stroke="#fff" stroke-width="2.5"/>
+    <text x="500" y="138" class="bg">A = 30</text>
+    <text x="572" y="122" class="rl">&#x2190; result</text>
+    <text x="350" y="340" class="an">Callee reads A and stack param b, computes result in A</text>
+  </g>
+
+  <!-- Step 6: Return + caller PLX cleanup -->
+  <g class="frame">
+    <text x="350" y="30" class="tt">Return + caller PLX cleanup</text>
+    <text x="350" y="52" class="sc">6 / 7</text>
+    <!-- Stack -->
+    <rect x="80" y="150" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="170" y="165" class="ct">...</text>
+    <text x="272" y="165" class="rl">caller frame</text>
+    <!-- Register: A = result -->
+    <rect x="430" y="120" width="140" height="36" rx="8" fill="#1abc9c" stroke="#16a085" stroke-width="2"/>
+    <text x="500" y="138" class="bg">A = 30</text>
+    <text x="350" y="340" class="an">Caller cleans up stack param via PLX (preserves A)</text>
+  </g>
+
+  <!-- Step 7: Result in A -->
+  <g class="frame">
+    <text x="350" y="30" class="tt">Result available in A register</text>
+    <text x="350" y="52" class="sc">7 / 7</text>
+    <!-- Stack -->
+    <rect x="80" y="150" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="170" y="165" class="ct">...</text>
+    <text x="272" y="165" class="rl">caller frame</text>
+    <!-- Register: A = result -->
+    <rect x="430" y="120" width="140" height="36" rx="8" fill="#1abc9c" stroke="#16a085" stroke-width="2"/>
+    <text x="500" y="138" class="bg">A = 30</text>
+    <text x="350" y="340" class="an">One stack push instead of two — register param saved a PHA</text>
+  </g>
+
+  <!-- Legend -->
+  <g>
+    <rect x="100" y="390" width="14" height="14" rx="2" fill="#2ecc71" stroke="#27ae60" stroke-width="1"/>
+    <text x="120" y="401" class="rl" font-size="10">Parameter</text>
+    <rect x="195" y="390" width="14" height="14" rx="2" fill="#3498db" stroke="#2980b9" stroke-width="1"/>
+    <text x="215" y="401" class="rl" font-size="10">Return addr</text>
+    <rect x="300" y="390" width="14" height="14" rx="2" fill="#9b59b6" stroke="#8e44ad" stroke-width="1"/>
+    <text x="320" y="401" class="rl" font-size="10">Frame</text>
+    <rect x="375" y="390" width="14" height="14" rx="2" fill="#1abc9c" stroke="#16a085" stroke-width="1"/>
+    <text x="395" y="401" class="rl" font-size="10">Register</text>
+    <rect x="460" y="390" width="14" height="14" rx="2" fill="#7f8c8d" stroke="#6c7a89" stroke-width="1"/>
+    <text x="480" y="401" class="rl" font-size="10">Inactive</text>
+  </g>
+
+  <script type="text/ecmascript"><![CDATA[
+    var currentFrame = 0;
+    var spPositions = [165, 129, 129, 93, 93, 165, 165];
+    var frames = document.querySelectorAll('.frame');
+    var totalFrames = frames.length;
+    var sp = document.querySelector('.sp-indicator');
+    var backBtn = document.getElementById('back-btn');
+
+    function showFrame(idx) {
+      for (var i = 0; i < frames.length; i++) {
+        frames[i].style.opacity = i === idx ? '1' : '0';
+      }
+      sp.style.transform = 'translateY(' + spPositions[idx] + 'px)';
+      if (idx === 0) {
+        backBtn.setAttribute('class', 'nav-btn disabled');
+      } else {
+        backBtn.setAttribute('class', 'nav-btn');
+      }
+    }
+
+    function goBack() {
+      if (currentFrame > 0) {
+        currentFrame--;
+        showFrame(currentFrame);
+      }
+    }
+
+    function goForward() {
+      currentFrame++;
+      if (currentFrame >= totalFrames) currentFrame = 0;
+      showFrame(currentFrame);
+    }
+
+    showFrame(0);
+  ]]></script>
+</svg>

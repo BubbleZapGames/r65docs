@@ -1,0 +1,216 @@
+<svg viewBox="0 0 700 450" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    text { font-family: 'SFMono-Regular', 'Cascadia Code', 'Consolas', monospace; }
+    .frame { opacity: 0; }
+    .sp-indicator { transition: transform 0.35s ease; }
+    .ct  { fill: #fff; font-size: 13px; text-anchor: middle; dominant-baseline: central; }
+    .rl  { fill: #64748b; font-size: 11px; dominant-baseline: central; stroke: #fff; stroke-width: 2; paint-order: stroke; }
+    .tt  { font-size: 15px; font-weight: bold; text-anchor: middle; fill: #334155; stroke: #fff; stroke-width: 4; paint-order: stroke; }
+    .sc  { font-size: 12px; text-anchor: middle; fill: #94a3b8; stroke: #fff; stroke-width: 2; paint-order: stroke; }
+    .an  { font-size: 13px; text-anchor: middle; fill: #475569; stroke: #fff; stroke-width: 3; paint-order: stroke; font-style: italic; }
+    .sp  { font-size: 12px; font-weight: bold; fill: #e74c3c; text-anchor: end; dominant-baseline: central; stroke: #fff; stroke-width: 2; paint-order: stroke; }
+    .bg  { font-size: 15px; font-weight: bold; fill: #fff; text-anchor: middle; dominant-baseline: central; }
+    .nav-btn { cursor: pointer; }
+    .nav-btn:hover .nav-bg { fill: rgba(148,163,184,0.55); }
+    .nav-btn.disabled { cursor: default; opacity: 0.3; pointer-events: none; }
+  </style>
+
+  <!-- Navigation controls -->
+  <g id="back-btn" class="nav-btn disabled" onclick="goBack()">
+    <rect class="nav-bg" x="10" y="10" width="30" height="30" rx="6" fill="rgba(148,163,184,0.35)"/>
+    <polygon points="30,16 30,34 18,25" fill="#475569"/>
+  </g>
+  <g id="fwd-btn" class="nav-btn" onclick="goForward()">
+    <rect class="nav-bg" x="45" y="10" width="30" height="30" rx="6" fill="rgba(148,163,184,0.35)"/>
+    <polygon points="52,16 52,34 64,25" fill="#475569"/>
+  </g>
+
+  <!-- Animated SP indicator (drawn at y=0, moved via translateY) -->
+  <g class="sp-indicator" style="transform: translateY(227px)">
+    <polygon points="198,-8 212,0 198,8" fill="#e74c3c"/>
+    <text x="193" y="0" class="sp">SP</text>
+  </g>
+
+  <!-- Step 1: Caller's frame -->
+  <g class="frame" style="opacity:1">
+    <text x="350" y="30" class="tt">Caller's frame</text>
+    <text x="350" y="52" class="sc">1 / 8</text>
+    <rect x="220" y="212" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="310" y="227" class="ct">locals</text>
+    <text x="412" y="227" class="rl">caller frame</text>
+    <rect x="220" y="248" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="310" y="263" class="ct">...</text>
+    <text x="350" y="315" class="an">Starting state before the call</text>
+  </g>
+
+  <!-- Step 2: Push result space -->
+  <g class="frame">
+    <text x="350" y="30" class="tt">Push result space</text>
+    <text x="350" y="52" class="sc">2 / 8</text>
+    <rect x="220" y="176" width="180" height="30" rx="4" fill="#e67e22" stroke="#d35400" stroke-width="1.5"/>
+    <text x="310" y="191" class="ct">result = ?</text>
+    <text x="412" y="191" class="rl">result space</text>
+    <rect x="220" y="212" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="310" y="227" class="ct">locals</text>
+    <rect x="220" y="248" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="310" y="263" class="ct">...</text>
+    <text x="350" y="315" class="an">Caller allocates space for return value on stack</text>
+  </g>
+
+  <!-- Step 3: Push param a -->
+  <g class="frame">
+    <text x="350" y="30" class="tt">Push parameter a (left-to-right)</text>
+    <text x="350" y="52" class="sc">3 / 8</text>
+    <rect x="220" y="140" width="180" height="30" rx="4" fill="#2ecc71" stroke="#27ae60" stroke-width="1.5"/>
+    <text x="310" y="155" class="ct">a = 10</text>
+    <text x="412" y="155" class="rl">param a</text>
+    <rect x="220" y="176" width="180" height="30" rx="4" fill="#e67e22" stroke="#d35400" stroke-width="1.5"/>
+    <text x="310" y="191" class="ct">result = ?</text>
+    <text x="412" y="191" class="rl">result space</text>
+    <rect x="220" y="212" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="310" y="227" class="ct">locals</text>
+    <rect x="220" y="248" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="310" y="263" class="ct">...</text>
+    <text x="350" y="315" class="an">First parameter pushed first (ends up deepest)</text>
+  </g>
+
+  <!-- Step 4: Push param b -->
+  <g class="frame">
+    <text x="350" y="30" class="tt">Push parameter b</text>
+    <text x="350" y="52" class="sc">4 / 8</text>
+    <rect x="220" y="104" width="180" height="30" rx="4" fill="#2ecc71" stroke="#27ae60" stroke-width="1.5"/>
+    <text x="310" y="119" class="ct">b = 20</text>
+    <text x="412" y="119" class="rl">param b</text>
+    <rect x="220" y="140" width="180" height="30" rx="4" fill="#2ecc71" stroke="#27ae60" stroke-width="1.5"/>
+    <text x="310" y="155" class="ct">a = 10</text>
+    <text x="412" y="155" class="rl">param a</text>
+    <rect x="220" y="176" width="180" height="30" rx="4" fill="#e67e22" stroke="#d35400" stroke-width="1.5"/>
+    <text x="310" y="191" class="ct">result = ?</text>
+    <text x="412" y="191" class="rl">result space</text>
+    <rect x="220" y="212" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="310" y="227" class="ct">locals</text>
+    <rect x="220" y="248" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="310" y="263" class="ct">...</text>
+    <text x="350" y="315" class="an">Last parameter closest to top of stack</text>
+  </g>
+
+  <!-- Step 5: Call -->
+  <g class="frame">
+    <text x="350" y="30" class="tt">Call: add(10, 20)</text>
+    <text x="350" y="52" class="sc">5 / 8</text>
+    <rect x="220" y="68" width="180" height="30" rx="4" fill="#3498db" stroke="#2980b9" stroke-width="1.5"/>
+    <text x="310" y="83" class="ct">return addr</text>
+    <text x="412" y="83" class="rl">pushed by call</text>
+    <rect x="220" y="104" width="180" height="30" rx="4" fill="#2ecc71" stroke="#27ae60" stroke-width="1.5"/>
+    <text x="310" y="119" class="ct">b = 20</text>
+    <rect x="220" y="140" width="180" height="30" rx="4" fill="#2ecc71" stroke="#27ae60" stroke-width="1.5"/>
+    <text x="310" y="155" class="ct">a = 10</text>
+    <rect x="220" y="176" width="180" height="30" rx="4" fill="#e67e22" stroke="#d35400" stroke-width="1.5"/>
+    <text x="310" y="191" class="ct">result = ?</text>
+    <rect x="220" y="212" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="310" y="227" class="ct">locals</text>
+    <rect x="220" y="248" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="310" y="263" class="ct">...</text>
+    <text x="350" y="315" class="an">Return address pushed onto stack</text>
+  </g>
+
+  <!-- Step 6: Callee writes result -->
+  <g class="frame">
+    <text x="350" y="30" class="tt">Callee writes result to stack</text>
+    <text x="350" y="52" class="sc">6 / 8</text>
+    <rect x="220" y="68" width="180" height="30" rx="4" fill="#3498db" stroke="#2980b9" stroke-width="1.5"/>
+    <text x="310" y="83" class="ct">return addr</text>
+    <rect x="220" y="104" width="180" height="30" rx="4" fill="#2ecc71" stroke="#fff" stroke-width="2.5"/>
+    <text x="310" y="119" class="ct">b = 20</text>
+    <text x="412" y="119" class="rl">&#x2190; read</text>
+    <rect x="220" y="140" width="180" height="30" rx="4" fill="#2ecc71" stroke="#fff" stroke-width="2.5"/>
+    <text x="310" y="155" class="ct">a = 10</text>
+    <text x="412" y="155" class="rl">&#x2190; read</text>
+    <rect x="220" y="176" width="180" height="30" rx="4" fill="#e67e22" stroke="#fff" stroke-width="2.5"/>
+    <text x="310" y="191" class="ct">result = 30</text>
+    <text x="412" y="191" class="rl">&#x2190; written</text>
+    <rect x="220" y="212" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="310" y="227" class="ct">locals</text>
+    <rect x="220" y="248" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="310" y="263" class="ct">...</text>
+    <text x="350" y="315" class="an">Callee computes 10 + 20 and stores result on stack</text>
+  </g>
+
+  <!-- Step 7: Callee cleanup + return -->
+  <g class="frame">
+    <text x="350" y="30" class="tt">Callee cleanup + return</text>
+    <text x="350" y="52" class="sc">7 / 8</text>
+    <rect x="220" y="176" width="180" height="30" rx="4" fill="#e67e22" stroke="#d35400" stroke-width="1.5"/>
+    <text x="310" y="191" class="ct">result = 30</text>
+    <text x="412" y="191" class="rl">result space</text>
+    <rect x="220" y="212" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="310" y="227" class="ct">locals</text>
+    <rect x="220" y="248" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="310" y="263" class="ct">...</text>
+    <text x="350" y="315" class="an">Callee removes params and return addr; result stays on stack</text>
+  </g>
+
+  <!-- Step 8: Caller pulls result -->
+  <g class="frame">
+    <text x="350" y="30" class="tt">Caller pulls result</text>
+    <text x="350" y="52" class="sc">8 / 8</text>
+    <rect x="220" y="212" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="310" y="227" class="ct">locals</text>
+    <text x="412" y="227" class="rl">caller frame</text>
+    <rect x="220" y="248" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="310" y="263" class="ct">...</text>
+    <rect x="510" y="175" width="140" height="36" rx="8" fill="#1abc9c" stroke="#16a085" stroke-width="2"/>
+    <text x="580" y="193" class="bg">A = 30</text>
+    <text x="350" y="315" class="an">Result pulled from stack into A register</text>
+  </g>
+
+  <!-- Legend -->
+  <g>
+    <rect x="70" y="360" width="14" height="14" rx="2" fill="#2ecc71" stroke="#27ae60" stroke-width="1"/>
+    <text x="90" y="371" class="rl" font-size="10">Parameter</text>
+    <rect x="160" y="360" width="14" height="14" rx="2" fill="#3498db" stroke="#2980b9" stroke-width="1"/>
+    <text x="180" y="371" class="rl" font-size="10">Return addr</text>
+    <rect x="265" y="360" width="14" height="14" rx="2" fill="#9b59b6" stroke="#8e44ad" stroke-width="1"/>
+    <text x="285" y="371" class="rl" font-size="10">Frame</text>
+    <rect x="340" y="360" width="14" height="14" rx="2" fill="#e67e22" stroke="#d35400" stroke-width="1"/>
+    <text x="360" y="371" class="rl" font-size="10">Result space</text>
+    <rect x="450" y="360" width="14" height="14" rx="2" fill="#1abc9c" stroke="#16a085" stroke-width="1"/>
+    <text x="470" y="371" class="rl" font-size="10">Register</text>
+  </g>
+
+  <script type="text/ecmascript"><![CDATA[
+    var currentFrame = 0;
+    var spPositions = [227, 191, 155, 119, 83, 83, 191, 227];
+    var frames = document.querySelectorAll('.frame');
+    var totalFrames = frames.length;
+    var sp = document.querySelector('.sp-indicator');
+    var backBtn = document.getElementById('back-btn');
+
+    function showFrame(idx) {
+      for (var i = 0; i < frames.length; i++) {
+        frames[i].style.opacity = i === idx ? '1' : '0';
+      }
+      sp.style.transform = 'translateY(' + spPositions[idx] + 'px)';
+      if (idx === 0) {
+        backBtn.setAttribute('class', 'nav-btn disabled');
+      } else {
+        backBtn.setAttribute('class', 'nav-btn');
+      }
+    }
+
+    function goBack() {
+      if (currentFrame > 0) {
+        currentFrame--;
+        showFrame(currentFrame);
+      }
+    }
+
+    function goForward() {
+      currentFrame++;
+      if (currentFrame >= totalFrames) currentFrame = 0;
+      showFrame(currentFrame);
+    }
+
+    showFrame(0);
+  ]]></script>
+</svg>
