@@ -131,14 +131,14 @@ target |= expression;
 target ^= expression;
 target <<= constant;
 target >>= constant;
-target *= constant;   // constant must be 1, 2, 4, or 8
-target /= constant;   // constant must be 1, 2, 4, or 8
+target *= constant;   // constant must be power of 2 (1–256)
+target /= constant;   // constant must be power of 2 (1–256)
 ```
 
 **Semantics:**
 
 - `target op= expr` desugars to `target = target op expr`.
-- The same restrictions from the base operator apply. Shift amounts must be compile-time constants. Multiply/divide constants must be 1, 2, 4, or 8.
+- The same restrictions from the base operator apply. Shift amounts must be compile-time constants. Multiply/divide constants must be powers of 2 from 1 to 256.
 
 **Examples:**
 

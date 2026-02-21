@@ -309,8 +309,8 @@ Operators are hardware-aware with restrictions on expensive operations:
 ```rust
 let sum = a + b;          // Addition (2-4 cycles)
 let diff = a - b;         // Subtraction (2-4 cycles)
-let doubled = a * 2;      // Multiply by 1, 2, 4, or 8 only
-let halved = a / 4;       // Divide by 1, 2, 4, or 8 only
+let doubled = a * 2;      // Multiply by power of 2 (1–256)
+let halved = a / 4;       // Divide by power of 2 (1–256)
 let shifted = a << 3;     // Constant shift amounts only
 let masked = a & 0x0F;    // Bitwise AND, OR, XOR unrestricted
 ```

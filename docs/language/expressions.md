@@ -20,8 +20,8 @@ All arithmetic is **unchecked**. Overflow wraps, underflow wraps, and division b
 | Category | Operators | Restrictions | Cycles |
 |---|---|---|---|
 | Arithmetic | `+`, `-` | None | 2--4 |
-| Multiply | `*` | Right operand must be constant 1, 2, 4, or 8 | 2--6 |
-| Divide | `/` | Right operand must be constant 1, 2, 4, or 8 | 2--6 |
+| Multiply | `*` | Right operand must be power-of-2 constant (1–256) | 2--16 |
+| Divide | `/` | Right operand must be power-of-2 constant (1–256) | 2--16 |
 | Left shift | `<<` | Right operand must be a compile-time constant | 2 per bit |
 | Right shift | `>>` | Right operand must be a compile-time constant | 2 per bit |
 | Bitwise | `&`, `\|`, `^`, `~` | None | 2--4 |
@@ -30,8 +30,8 @@ All arithmetic is **unchecked**. Overflow wraps, underflow wraps, and division b
 | Unary minus | `-` (prefix) | None | 4--6 |
 | Bitwise NOT | `~` | None | 2--4 |
 | Compound assign | `+=`, `-=`, `&=`, `\|=`, `^=`, `<<=`, `>>=` | Inherit base operator restrictions | Same as base |
-| Multiply assign | `*=` | Right operand must be constant 1, 2, 4, or 8 | 2--6 |
-| Divide assign | `/=` | Right operand must be constant 1, 2, 4, or 8 | 2--6 |
+| Multiply assign | `*=` | Right operand must be power-of-2 constant (1–256) | 2--16 |
+| Divide assign | `/=` | Right operand must be power-of-2 constant (1–256) | 2--16 |
 | Increment | `x++` | Postfix only, statement-only | 2--6 |
 | Decrement | `x--` | Postfix only, statement-only | 2--6 |
 | Type cast | `as` | See [Type Casts](#type-casts) | 0--8 |
@@ -57,30 +57,32 @@ The compiler optimizes `a + 1` and `a - 1` to `INC` / `DEC` instructions when po
 
 ### Restricted Multiply
 
-The `*` operator only accepts the constants **1, 2, 4, or 8** as the right operand. The compiler translates these to shift instructions.
+The `*` operator only accepts **power-of-2 constants from 1 to 256** as the right operand. The compiler translates these to shift instructions.
 
 ```rust
 let x: u8 = a * 2;     // ASL           (2 cycles)
 let y: u8 = a * 4;     // ASL; ASL      (4 cycles)
 let z: u8 = a * 8;     // ASL; ASL; ASL (6 cycles)
+let w: u8 = a * 64;    // 6x ASL        (12 cycles)
 
-let w: u8 = a * 3;     // COMPILE ERROR: use mul(a, 3)
-let v: u8 = a * b;     // COMPILE ERROR: use mul(a, b)
+let e: u8 = a * 3;     // COMPILE ERROR: use mul(a, 3)
+let f: u8 = a * b;     // COMPILE ERROR: use mul(a, b)
 ```
 
 For general multiplication, use the `mul()` function.
 
 ### Restricted Divide
 
-The `/` operator only accepts the constants **1, 2, 4, or 8** as the right operand. The compiler translates these to logical right shifts (`LSR`).
+The `/` operator only accepts **power-of-2 constants from 1 to 256** as the right operand. The compiler translates these to logical right shifts (`LSR`).
 
 ```rust
 let x: u8 = a / 2;     // LSR           (2 cycles)
 let y: u8 = a / 4;     // LSR; LSR      (4 cycles)
 let z: u8 = a / 8;     // LSR; LSR; LSR (6 cycles)
+let w: u8 = a / 64;    // 6x LSR        (12 cycles)
 
-let w: u8 = a / 3;     // COMPILE ERROR: use div(a, 3)
-let v: u8 = a / b;     // COMPILE ERROR: use div(a, b)
+let e: u8 = a / 3;     // COMPILE ERROR: use div(a, 3)
+let f: u8 = a / b;     // COMPILE ERROR: use div(a, b)
 ```
 
 Both signed and unsigned division use logical right shift. Arithmetic right shift (sign-preserving) is not currently implemented for the `/` operator.
@@ -220,8 +222,8 @@ a |= 0x80;      // a = a | 0x80
 a ^= mask;      // a = a ^ mask
 a <<= 3;        // a = a << 3 (constant required)
 a >>= 1;        // a = a >> 1 (constant required)
-a *= 2;         // a = a * 2 (must be 1, 2, 4, or 8)
-a /= 4;         // a = a / 4 (must be 1, 2, 4, or 8)
+a *= 2;         // a = a * 2 (power of 2, 1–256)
+a /= 4;         // a = a / 4 (power of 2, 1–256)
 
 a *= b;         // COMPILE ERROR: variable multiply
 a /= b;         // COMPILE ERROR: variable divide
