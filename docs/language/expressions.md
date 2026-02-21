@@ -9,7 +9,7 @@ description: R65 operators, precedence, type casts, and expression evaluation.
 R65 provides operators and functions that clearly distinguish between hardware-supported operations (fast) and software-implemented operations (slow).
 
 - **Operators** (`+`, `-`, `*`, `/`, `<<`, `>>`, etc.) map directly to 65816 instructions or short instruction sequences. Cost: 2--10 cycles.
-- **Functions** (`mul()`, `div()`, `mod()`, `shl()`, `shr()`) are software subroutines for operations the hardware cannot perform in a fixed number of instructions. Cost: 20--200+ cycles.
+- **Functions** (`mul8()`/`mul16()`, `div8()`/`div16()`, `mod8()`, `shl8()`/`shl16()`, `shr8()`/`shr16()`) are software subroutines for operations the hardware cannot perform in a fixed number of instructions. Cost: 20--200+ cycles.
 
 All arithmetic is **unchecked**. Overflow wraps, underflow wraps, and division by zero is undefined behavior. There are no runtime checks.
 
@@ -65,11 +65,11 @@ let y: u8 = a * 4;     // ASL; ASL      (4 cycles)
 let z: u8 = a * 8;     // ASL; ASL; ASL (6 cycles)
 let w: u8 = a * 64;    // 6x ASL        (12 cycles)
 
-let e: u8 = a * 3;     // COMPILE ERROR: use mul(a, 3)
-let f: u8 = a * b;     // COMPILE ERROR: use mul(a, b)
+let e: u8 = a * 3;     // COMPILE ERROR: use mul8(a, 3)
+let f: u8 = a * b;     // COMPILE ERROR: use mul8(a, b)
 ```
 
-For general multiplication, use the `mul()` function.
+For general multiplication, use the `mul8()` / `mul16()` functions.
 
 ### Restricted Divide
 
@@ -81,16 +81,16 @@ let y: u8 = a / 4;     // LSR; LSR      (4 cycles)
 let z: u8 = a / 8;     // LSR; LSR; LSR (6 cycles)
 let w: u8 = a / 64;    // 6x LSR        (12 cycles)
 
-let e: u8 = a / 3;     // COMPILE ERROR: use div(a, 3)
-let f: u8 = a / b;     // COMPILE ERROR: use div(a, b)
+let e: u8 = a / 3;     // COMPILE ERROR: use div8(a, 3)
+let f: u8 = a / b;     // COMPILE ERROR: use div8(a, b)
 ```
 
 Both signed and unsigned division use logical right shift. Arithmetic right shift (sign-preserving) is not currently implemented for the `/` operator.
 
-For general division, use the `div()` function.
+For general division, use the `div8()` / `div16()` functions.
 
 :::note
-The `%` (modulo) operator is parsed but **not supported** at code generation. Use the `mod()` function instead. For power-of-2 modulo, prefer bitwise AND: `a & 0xFF` is equivalent to `mod(a, 256)`.
+The `%` (modulo) operator is parsed but **not supported** at code generation. Use the `mod8()` function instead. For power-of-2 modulo, prefer bitwise AND: `a & 0xFF` is equivalent to `mod8(a, 256)`.
 :::
 
 ---
@@ -105,13 +105,13 @@ The `%` (modulo) operator is parsed but **not supported** at code generation. Us
 let x: u8 = a << 3;    // ASL; ASL; ASL (6 cycles)
 let y: u8 = a >> 2;    // LSR; LSR      (4 cycles)
 
-let z: u8 = a << n;    // COMPILE ERROR: use shl(a, n)
-let w: u8 = a >> n;    // COMPILE ERROR: use shr(a, n)
+let z: u8 = a << n;    // COMPILE ERROR: use shl8(a, n)
+let w: u8 = a >> n;    // COMPILE ERROR: use shr8(a, n)
 ```
 
 `>>` always performs a **logical shift** (fills with zeros), regardless of whether the operand is signed or unsigned. Shifting by an amount greater than or equal to the bit width is undefined behavior.
 
-For variable shift amounts, use the `shl()` and `shr()` functions.
+For variable shift amounts, use the `shl8()` / `shl16()` and `shr8()` / `shr16()` functions.
 
 ---
 
@@ -131,7 +131,7 @@ let inverted: u8 = ~value;         // EOR #$FF: flip all bits
 ```rust
 let low_nibble = value & 0x0F;     // Extract low 4 bits
 let is_set = flags & 0x80;         // Test bit 7
-let wrapped = index & 0xFF;        // Modulo 256 (faster than mod())
+let wrapped = index & 0xFF;        // Modulo 256 (faster than mod8())
 let aligned = addr & 0xFFF0;       // Align to 16-byte boundary
 flags = flags | 0x01;              // Set bit 0
 flags = flags & ~0x01;             // Clear bit 0
@@ -359,7 +359,7 @@ let y = a & (b | c);       // OR first, then AND
 let z = (flags & 0x80) != 0;  // Mask first, then compare
 ```
 
-Function calls (`mul()`, `div()`, etc.) have higher precedence than all operators, as with any function call expression.
+Function calls (`mul8()`, `div8()`, etc.) have higher precedence than all operators, as with any function call expression.
 
 ---
 
@@ -371,56 +371,55 @@ When an operation cannot be expressed with the restricted operators, use the cor
 
 | Function | Operation | Cost |
 |---|---|---|
-| `mul(a, b)` | General multiplication | 20--100+ cycles |
-| `div(a, b)` | General division | 50--200+ cycles |
-| `mod(a, b)` | Remainder after division | 50--200+ cycles |
-| `shl(a, n)` | Variable left shift | ~8 + 6n cycles |
-| `shr(a, n)` | Variable right shift | ~8 + 6n cycles |
+| `mul8(a, b)` / `mul16(a, b)` | General multiplication | 20--100+ cycles |
+| `div8(a, b)` / `div16(a, b)` | General division | 50--200+ cycles |
+| `mod8(a, b)` | Remainder after division | 50--200+ cycles |
+| `shl8(a, n)` / `shl16(a, n)` | Variable left shift | ~8 + 6n cycles |
+| `shr8(a, n)` / `shr16(a, n)` | Variable right shift | ~8 + 6n cycles |
 
-All functions require both operands to be the same type (except the shift amount for `shl`/`shr`, which is `u8`).
+All functions require both operands to be the same type (except the shift amount for `shl8`/`shr8`, which is `u8`).
 
-### mul()
+### mul8() / mul16()
 
 General-purpose multiplication. Both operands must be the same integer type. The result is truncated to the operand size.
 
 ```rust
-let area: u8 = mul(width, height);
-let offset: u16 = mul(y as u16, 320 as u16);
+let area: u8 = mul8(width, height);
+let offset: u16 = mul16(y as u16, 320 as u16);
 ```
 
 With `--cfg snes`, 8-bit multiplication uses the SNES hardware multiplier for faster results.
 
-### div()
+### div8() / div16()
 
 General-purpose division. Division by zero is undefined behavior.
 
 ```rust
-let avg: u8 = div(sum, count);
-let tiles: u8 = div(pixels, 7);
+let avg: u8 = div8(sum, count);
+let tiles: u8 = div8(pixels, 7);
 ```
 
-### mod()
+### mod8()
 
 Returns the remainder after division. Division by zero is undefined behavior.
 
 ```rust
-let remainder: u8 = mod(distance, tile_size);
-let wrapped: u16 = mod(index, buffer_size);
+let remainder: u8 = mod8(distance, tile_size);
 
 // Prefer bitwise AND for power-of-2 modulo:
-let wrapped: u8 = index & 0xFF;    // Same as mod(index, 256), much faster
+let wrapped: u8 = index & 0xFF;    // Same as mod8(index, 256), much faster
 ```
 
-### shl() and shr()
+### shl8() / shl16() and shr8() / shr16()
 
 Variable shift amounts. The shift amount is `u8` and can be a runtime value.
 
 ```rust
-let shifted: u8 = shl(value, bit_pos);     // Variable left shift
-let extracted: u8 = shr(flags, offset);     // Variable right shift
+let shifted: u8 = shl8(value, bit_pos);     // Variable left shift
+let extracted: u8 = shr8(flags, offset);     // Variable right shift
 ```
 
-For signed operands, `shr()` performs an arithmetic right shift (preserves the sign bit). For unsigned operands, it performs a logical right shift (fills with zeros).
+For signed operands, `shri8()` performs an arithmetic right shift (preserves the sign bit). For unsigned operands, `shr8()` / `shr16()` perform a logical right shift (fills with zeros).
 
 :::tip
 If the shift amount is a compile-time constant, prefer the `<<` and `>>` operators. They compile to inline instructions and avoid the subroutine call overhead.
@@ -438,18 +437,18 @@ let shifted: u8 = value << 5;          // 5x ASL (10 cycles)
 let masked: u8 = value & 0x1F;         // AND #$1F (2-4 cycles)
 
 // SLOW: function compiles to a subroutine call
-let product: u8 = mul(value, 7);       // JSR __mul_u8 (20-100+ cycles)
-let quotient: u8 = div(value, 3);      // JSR __div_u8 (50-200+ cycles)
-let remainder: u8 = mod(value, 5);     // JSR __mod_u8 (50-200+ cycles)
-let shifted: u8 = shl(value, amount);  // JSR __shl_u8 (~8 + 6*amount cycles)
+let product: u8 = mul8(value, 7);       // JSR __mul_u8 (20-100+ cycles)
+let quotient: u8 = div8(value, 3);      // JSR __div_u8 (50-200+ cycles)
+let remainder: u8 = mod8(value, 5);     // JSR __mod_u8 (50-200+ cycles)
+let shifted: u8 = shl8(value, amount);  // JSR __shl_u8 (~8 + 6*amount cycles)
 ```
 
 **Guidelines:**
 
 1. Use operators whenever possible -- they are always faster than function equivalents.
-2. Use `a * 2` / `a * 4` / `a * 8` instead of `mul(a, 2)` / `mul(a, 4)` / `mul(a, 8)`.
-3. Use `a & mask` instead of `mod(a, power_of_2)` for power-of-2 modulo.
-4. Avoid `div()` and `mod()` in tight loops. Pre-compute values or use lookup tables.
+2. Use `a * 2` / `a * 4` / `a * 8` instead of `mul8(a, 2)` / `mul8(a, 4)` / `mul8(a, 8)`.
+3. Use `a & mask` instead of `mod8(a, power_of_2)` for power-of-2 modulo.
+4. Avoid `div8()` and `mod8()` in tight loops. Pre-compute values or use lookup tables.
 5. Favor 8-bit operations over 16-bit when possible -- they are faster in m8 mode.
 6. Use `a += 1` or `a++` instead of `a = a + 1` -- the compiler emits `INC`/`INX`/`INY`.
 
@@ -463,12 +462,12 @@ All operations wrap silently. There are no overflow traps, checked arithmetic, o
 let x: u8 = 255 + 1;       // 0 (wraps)
 let y: u8 = 0 - 1;         // 255 (wraps)
 let z: i8 = 127 + 1;       // -128 (wraps)
-let w: u8 = mul(200, 2);   // 144 (400 truncated to u8)
+let w: u8 = mul8(200, 2);   // 144 (400 truncated to u8)
 ```
 
 Division by zero is undefined behavior at runtime. Constant division by zero is caught at compile time.
 
 ```rust
-let x: u8 = div(10, 0);    // Undefined behavior (no runtime check)
+let x: u8 = div8(10, 0);    // Undefined behavior (no runtime check)
 let y: u8 = 10 / 0;        // Compile error (constant expression)
 ```

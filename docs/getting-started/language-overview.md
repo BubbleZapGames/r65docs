@@ -318,10 +318,10 @@ let masked = a & 0x0F;    // Bitwise AND, OR, XOR unrestricted
 General multiplication, division, modulo, and variable shifts require function calls:
 
 ```rust
-let product = mul(a, b);    // 20-100+ cycles
-let quotient = div(a, b);   // 50-200+ cycles
-let remainder = mod(a, b);  // 50-200+ cycles
-let dynamic = shl(a, n);    // Variable shift
+let product = mul8(a, b);    // 20-100+ cycles
+let quotient = div8(a, b);   // 50-200+ cycles
+let remainder = mod8(a, b);  // 50-200+ cycles
+let dynamic = shl8(a, n);    // Variable shift
 ```
 
 Compound assignment (`+=`, `-=`, `&=`, etc.), postfix increment/decrement (`x++`, `x--`), and short-circuit logical operators (`&&`, `||`) are all supported.
