@@ -25,12 +25,6 @@
     <polygon points="52,16 52,34 64,25" fill="#475569"/>
   </g>
 
-  <!-- Animated SP indicator (drawn at y=0, moved via translateY) -->
-  <g class="sp-indicator" style="transform: translateY(227px)">
-    <polygon points="198,-8 212,0 198,8" fill="#e74c3c"/>
-    <text x="193" y="0" class="sp">SP</text>
-  </g>
-
   <!-- Step 1: Caller's frame -->
   <g class="frame" style="opacity:1">
     <text x="350" y="30" class="tt">Caller's frame</text>
@@ -162,6 +156,12 @@
     <rect x="510" y="175" width="140" height="36" rx="8" fill="#1abc9c" stroke="#16a085" stroke-width="2"/>
     <text x="580" y="193" class="bg">A = 30</text>
     <text x="350" y="315" class="an">Result pulled from stack into A register</text>
+  </g>
+
+  <!-- Animated SP indicator (drawn at y=0, moved via translateY) -->
+  <g class="sp-indicator" style="transform: translateY(227px)">
+    <polygon points="198,-8 212,0 198,8" fill="#e74c3c"/>
+    <text x="193" y="0" class="sp">SP</text>
   </g>
 
   <!-- Legend -->

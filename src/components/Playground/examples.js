@@ -2,9 +2,7 @@ export const EXAMPLES = [
   {
     name: 'Buffer Fill',
     description: 'Zero-overhead pointer + register parameter passing',
-    source: `fn fill(buffer @ X: *u8, value @ A: u8, count @ Y: u16) {
-    // buffer ptr in X, value in A, count in Y
-    // No stack overhead!
+    source: `fn fill(buffer: *u8, value: u8, count: u16) {
     while count > 0 {
         count--;
         buffer[count] = value;

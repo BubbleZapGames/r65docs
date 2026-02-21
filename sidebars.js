@@ -41,6 +41,7 @@ const sidebars = {
         'platform/snes-rom-header',
         'platform/register-allocation',
         'platform/math',
+        'platform/abi-models',
       ],
     },
   ],

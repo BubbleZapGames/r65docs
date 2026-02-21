@@ -27,23 +27,6 @@
     <polygon points="52,16 52,34 64,25" fill="#475569"/>
   </g>
 
-  <!-- Static elements: column headers and divider -->
-  <g>
-    <text x="170" y="90" class="hdr" text-anchor="middle">Stack</text>
-    <line x1="170" y1="96" x2="170" y2="100" stroke="#94a3b8" stroke-width="1"/>
-    <text x="500" y="90" class="hdr" text-anchor="middle">Registers</text>
-    <line x1="500" y1="96" x2="500" y2="100" stroke="#94a3b8" stroke-width="1"/>
-    <text x="500" y="210" class="hdr" text-anchor="middle">Scratch (DP)</text>
-    <line x1="500" y1="216" x2="500" y2="220" stroke="#94a3b8" stroke-width="1"/>
-    <line x1="340" y1="80" x2="340" y2="300" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4,4"/>
-  </g>
-
-  <!-- Animated SP indicator (drawn at y=0, moved via translateY) -->
-  <g class="sp-indicator" style="transform: translateY(165px)">
-    <polygon points="58,-8 72,0 58,8" fill="#e74c3c"/>
-    <text x="53" y="0" class="sp">SP</text>
-  </g>
-
   <!-- Step 1: Idle -->
   <g class="frame" style="opacity:1">
     <text x="350" y="30" class="tt">Idle — before call</text>
@@ -128,6 +111,23 @@
     <rect x="430" y="235" width="140" height="36" rx="8" fill="#7f8c8d" stroke="#6c7a89" stroke-width="1.5" opacity="0.5"/>
     <text x="500" y="253" class="rv" fill="#ccc">$10 = ?</text>
     <text x="350" y="340" class="an">Stack unchanged — minimal frame, maximum performance</text>
+  </g>
+
+  <!-- Animated SP indicator (drawn at y=0, moved via translateY) -->
+  <g class="sp-indicator" style="transform: translateY(165px)">
+    <polygon points="58,-8 72,0 58,8" fill="#e74c3c"/>
+    <text x="53" y="0" class="sp">SP</text>
+  </g>
+
+  <!-- Static elements: column headers and divider (after frames so they render on top) -->
+  <g>
+    <text x="170" y="90" class="hdr" text-anchor="middle">Stack</text>
+    <line x1="170" y1="96" x2="170" y2="100" stroke="#94a3b8" stroke-width="1"/>
+    <text x="500" y="90" class="hdr" text-anchor="middle">Registers</text>
+    <line x1="500" y1="96" x2="500" y2="100" stroke="#94a3b8" stroke-width="1"/>
+    <text x="500" y="210" class="hdr" text-anchor="middle">Scratch (DP)</text>
+    <line x1="500" y1="216" x2="500" y2="220" stroke="#94a3b8" stroke-width="1"/>
+    <line x1="340" y1="80" x2="340" y2="300" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4,4"/>
   </g>
 
   <!-- Legend -->
