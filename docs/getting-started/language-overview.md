@@ -238,7 +238,7 @@ BUFFER[X] = 42;
 let val: u8 = BUFFER[Y];
 ```
 
-String literals are only valid in static array initializers. Arrays cannot be passed by value -- use pointer parameters (`*[u8]`).
+String literals are only valid in static array initializers. Arrays cannot be passed by value -- use pointer parameters (`*u8`).
 
 ## Pointers
 

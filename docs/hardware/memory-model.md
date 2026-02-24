@@ -171,12 +171,12 @@ let value = *ptr;
 
 Assembly: `LDA [$zp]` (indirect long), `LDA [$zp],Y` (indirect long indexed)
 
-### Pointer to Slice: `*[T]`
+### Pointer to Array: `*[T; N]`
 
-An unsized array pointer points to a contiguous sequence of `T` with no known length. A `*[T; N]` (pointer to fixed-size array) implicitly coerces to `*[T]`:
+Pointer to a fixed-size array — enables compile-time bounds checking on constant indices. A `*[T; N]` implicitly coerces to `*T`:
 
 ```rust
-fn process(data: *[u8]) {
+fn process(data: *u8) {
     X = 0;
     loop {
         A = data[X];
@@ -186,7 +186,7 @@ fn process(data: *[u8]) {
 }
 
 static TABLE: [u8; 256] = [0; 256];
-process(&TABLE);  // *[u8; 256] coerces to *[u8]
+process(&TABLE);  // *[u8; 256] coerces to *u8
 ```
 
 ### Function Pointers
@@ -322,16 +322,16 @@ if ptr1 == ptr2 { }        // Equality
 if ptr1 as u16 != 0 { }    // Null check
 ```
 
-### Slice Coercion
+### Array Pointer Coercion
 
-A `*[T; N]` implicitly coerces to `*[T]`:
+A `*[T; N]` implicitly coerces to `*T`:
 
 ```rust
 static TABLE: [u8; 256] = [0; 256];
 
-fn process(data: *[u8]) { /* ... */ }
+fn process(data: *u8) { /* ... */ }
 
-process(&TABLE);  // *[u8; 256] coerces to *[u8]
+process(&TABLE);  // *[u8; 256] coerces to *u8
 ```
 
 ## Addressing Mode Mapping

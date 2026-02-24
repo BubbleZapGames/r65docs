@@ -197,19 +197,19 @@ let ptr: far *u8 = 0x01_2000;   // 3 bytes, 24-bit address (includes bank)
 
 Far pointers address the full 16MB address space.
 
-#### Pointer to Slice (Unsized Array)
+#### Pointer to Array
 
 ```rust
-let ptr: *[u8];   // Near pointer to unsized array
+let ptr: *[u8; 256];   // Near pointer to fixed-size array
 ```
 
-`*[T]` points to a contiguous sequence of `T` with unknown length. A pointer to a fixed-size array (`*[T; N]`) coerces implicitly to `*[T]`, enabling generic array parameters:
+`*[T; N]` points to a fixed-size array, enabling compile-time bounds checking on constant indices. It implicitly coerces to `*T`, enabling generic array parameters:
 
 ```rust
-fn process(data: *[u8]) { }
+fn process(data: *u8) { }
 
 static TABLE: [u8; 256] = [0; 256];
-process(&TABLE);   // *[u8; 256] coerces to *[u8]
+process(&TABLE);   // *[u8; 256] coerces to *u8
 ```
 
 #### Pointer Sizes
@@ -218,8 +218,6 @@ process(&TABLE);   // *[u8; 256] coerces to *[u8]
 |---------------|---------|---------------------|
 | `*T`          | 2 bytes | 64KB (current bank) |
 | `far *T`      | 3 bytes | 16MB (full address space) |
-| `*[T]`        | 2 bytes | Same as `*T`        |
-| `far *[T]`    | 3 bytes | Same as `far *T`    |
 
 #### Operations
 
@@ -316,8 +314,8 @@ let w: Word = 0x1234;     // Same as: let w: u16 = 0x1234;
 |-------------------|---------|
 | `u8`, `i8`, `bool` | 1 byte  |
 | `u16`, `i16`      | 2 bytes |
-| `*T`, `*[T]`      | 2 bytes |
-| `far *T`, `far *[T]` | 3 bytes |
+| `*T`              | 2 bytes |
+| `far *T`          | 3 bytes |
 | `fn()`            | 2 bytes |
 | `far fn()`        | 3 bytes |
 | `[T; N]`          | `N * sizeof(T)` |
