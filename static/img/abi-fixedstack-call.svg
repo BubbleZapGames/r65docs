@@ -31,9 +31,9 @@
   <g class="frame" style="opacity:1">
     <text x="350" y="30" class="tt">Idle — before call</text>
     <text x="350" y="52" class="sc">1 / 6</text>
-    <rect x="80" y="150" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
-    <text x="170" y="165" class="ct">...</text>
-    <text x="272" y="165" class="rl">caller frame</text>
+    <rect x="80" y="186" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="170" y="201" class="ct">...</text>
+    <text x="272" y="201" class="rl">caller frame</text>
     <rect x="430" y="120" width="140" height="36" rx="8" fill="#7f8c8d" stroke="#6c7a89" stroke-width="1.5" opacity="0.5"/>
     <text x="500" y="138" class="rv" fill="#ccc">A = ?</text>
     <rect x="430" y="235" width="140" height="36" rx="8" fill="#7f8c8d" stroke="#6c7a89" stroke-width="1.5" opacity="0.5"/>
@@ -45,8 +45,8 @@
   <g class="frame">
     <text x="350" y="30" class="tt">Load a into A register</text>
     <text x="350" y="52" class="sc">2 / 6</text>
-    <rect x="80" y="150" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
-    <text x="170" y="165" class="ct">...</text>
+    <rect x="80" y="186" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="170" y="201" class="ct">...</text>
     <rect x="430" y="120" width="140" height="36" rx="8" fill="#1abc9c" stroke="#16a085" stroke-width="2"/>
     <text x="500" y="138" class="bg">A = 10</text>
     <text x="572" y="122" class="rl">&#x2190; param a</text>
@@ -59,8 +59,8 @@
   <g class="frame">
     <text x="350" y="30" class="tt">Store b to scratch register</text>
     <text x="350" y="52" class="sc">3 / 6</text>
-    <rect x="80" y="150" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
-    <text x="170" y="165" class="ct">...</text>
+    <rect x="80" y="186" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="170" y="201" class="ct">...</text>
     <rect x="430" y="120" width="140" height="36" rx="8" fill="#1abc9c" stroke="#16a085" stroke-width="2"/>
     <text x="500" y="138" class="bg">A = 10</text>
     <rect x="430" y="235" width="140" height="36" rx="8" fill="#1abc9c" stroke="#16a085" stroke-width="2"/>
@@ -73,11 +73,11 @@
   <g class="frame">
     <text x="350" y="30" class="tt">Call: add(10, 20)</text>
     <text x="350" y="52" class="sc">4 / 6</text>
-    <rect x="80" y="114" width="180" height="30" rx="4" fill="#3498db" stroke="#2980b9" stroke-width="1.5"/>
-    <text x="170" y="129" class="ct">return addr</text>
-    <text x="272" y="129" class="rl">pushed by call</text>
-    <rect x="80" y="150" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
-    <text x="170" y="165" class="ct">...</text>
+    <rect x="80" y="150" width="180" height="30" rx="4" fill="#3498db" stroke="#2980b9" stroke-width="1.5"/>
+    <text x="170" y="165" class="ct">return addr</text>
+    <text x="272" y="165" class="rl">pushed by call</text>
+    <rect x="80" y="186" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="170" y="201" class="ct">...</text>
     <rect x="430" y="120" width="140" height="36" rx="8" fill="#1abc9c" stroke="#16a085" stroke-width="2"/>
     <text x="500" y="138" class="bg">A = 10</text>
     <rect x="430" y="235" width="140" height="36" rx="8" fill="#1abc9c" stroke="#16a085" stroke-width="2"/>
@@ -89,8 +89,8 @@
   <g class="frame">
     <text x="350" y="30" class="tt">Callee executes + returns</text>
     <text x="350" y="52" class="sc">5 / 6</text>
-    <rect x="80" y="150" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
-    <text x="170" y="165" class="ct">...</text>
+    <rect x="80" y="186" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="170" y="201" class="ct">...</text>
     <rect x="430" y="120" width="140" height="36" rx="8" fill="#1abc9c" stroke="#fff" stroke-width="2.5"/>
     <text x="500" y="138" class="bg">A = 30</text>
     <text x="572" y="122" class="rl">&#x2190; result</text>
@@ -103,9 +103,9 @@
   <g class="frame">
     <text x="350" y="30" class="tt">Result available in A register</text>
     <text x="350" y="52" class="sc">6 / 6</text>
-    <rect x="80" y="150" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
-    <text x="170" y="165" class="ct">...</text>
-    <text x="272" y="165" class="rl">caller frame</text>
+    <rect x="80" y="186" width="180" height="30" rx="4" fill="#9b59b6" stroke="#8e44ad" stroke-width="1.5"/>
+    <text x="170" y="201" class="ct">...</text>
+    <text x="272" y="201" class="rl">caller frame</text>
     <rect x="430" y="120" width="140" height="36" rx="8" fill="#1abc9c" stroke="#16a085" stroke-width="2"/>
     <text x="500" y="138" class="bg">A = 30</text>
     <rect x="430" y="235" width="140" height="36" rx="8" fill="#7f8c8d" stroke="#6c7a89" stroke-width="1.5" opacity="0.5"/>
@@ -114,7 +114,7 @@
   </g>
 
   <!-- Animated SP indicator (drawn at y=0, moved via translateY) -->
-  <g class="sp-indicator" style="transform: translateY(165px)">
+  <g class="sp-indicator" style="transform: translateY(201px)">
     <polygon points="58,-8 72,0 58,8" fill="#e74c3c"/>
     <text x="53" y="0" class="sp">SP</text>
   </g>
@@ -127,7 +127,7 @@
     <line x1="500" y1="96" x2="500" y2="100" stroke="#94a3b8" stroke-width="1"/>
     <text x="500" y="210" class="hdr" text-anchor="middle">Scratch (DP)</text>
     <line x1="500" y1="216" x2="500" y2="220" stroke="#94a3b8" stroke-width="1"/>
-    <line x1="340" y1="80" x2="340" y2="300" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4,4"/>
+    <line x1="340" y1="80" x2="340" y2="330" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4,4"/>
   </g>
 
   <!-- Legend -->
@@ -144,7 +144,7 @@
 
   <script type="text/ecmascript"><![CDATA[
     var currentFrame = 0;
-    var spPositions = [165, 165, 165, 129, 165, 165];
+    var spPositions = [201, 201, 201, 165, 201, 201];
     var frames = document.querySelectorAll('.frame');
     var totalFrames = frames.length;
     var sp = document.querySelector('.sp-indicator');
