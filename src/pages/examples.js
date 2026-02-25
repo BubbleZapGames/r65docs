@@ -18,6 +18,7 @@ function PreviewOverlay({ smcUrl, exampleName, onClose }) {
     window.EJS_core = 'snes';
     window.EJS_gameName = exampleName;
     window.EJS_color = '#0064ff';
+    window.EJS_startOnLoaded = true;
     window.EJS_pathtodata = 'https://cdn.emulatorjs.org/stable/data/';
     window.EJS_gameUrl = smcUrl;
     window.EJS_VirtualGamepadSettings = [
@@ -43,6 +44,7 @@ function PreviewOverlay({ smcUrl, exampleName, onClose }) {
       delete window.EJS_color;
       delete window.EJS_pathtodata;
       delete window.EJS_gameUrl;
+      delete window.EJS_startOnLoaded;
       delete window.EJS_VirtualGamepadSettings;
       // EmulatorJS creates an iframe and other elements — clearing the container removes them
       container.innerHTML = '<div id="ejs-game"></div>';
