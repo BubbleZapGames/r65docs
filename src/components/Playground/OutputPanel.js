@@ -53,17 +53,31 @@ function AsmViewer({ code }) {
     async function setup() {
       const { EditorView, lineNumbers } = await import('@codemirror/view');
       const { EditorState } = await import('@codemirror/state');
-      const { StreamLanguage } = await import('@codemirror/language');
+      const { StreamLanguage, codeFolding, foldGutter, foldEffect, foldService } = await import('@codemirror/language');
       const { wladx65816 } = await import('./wladx-mode');
       const { oneDark } = await import('@codemirror/theme-one-dark');
 
       if (destroyed || !containerRef.current) return;
+
+      const FOLD_LINES = 30;
+
+      // Fold service that offers to fold lines 1-30 as a single region
+      const headerFold = foldService.of((state, lineStart) => {
+        if (state.doc.lineAt(lineStart).number === 1 && state.doc.lines > FOLD_LINES) {
+          const endLine = state.doc.line(FOLD_LINES);
+          return { from: state.doc.line(1).to, to: endLine.to };
+        }
+        return null;
+      });
 
       const extensions = [
         EditorState.readOnly.of(true),
         EditorView.editable.of(false),
         StreamLanguage.define(wladx65816),
         lineNumbers(),
+        headerFold,
+        codeFolding(),
+        foldGutter(),
         EditorView.theme({
           '&': { height: '100%' },
           '.cm-scroller': { overflow: 'auto' },
@@ -82,10 +96,19 @@ function AsmViewer({ code }) {
 
       containerRef.current.innerHTML = '';
 
+      const state = EditorState.create({ doc: code, extensions });
       viewRef.current = new EditorView({
-        state: EditorState.create({ doc: code, extensions }),
+        state,
         parent: containerRef.current,
       });
+
+      // Auto-fold the first 30 lines
+      if (code.split('\n').length > FOLD_LINES) {
+        const endLine = state.doc.line(FOLD_LINES);
+        viewRef.current.dispatch({
+          effects: foldEffect.of({ from: state.doc.line(1).to, to: endLine.to }),
+        });
+      }
     }
 
     setup();
