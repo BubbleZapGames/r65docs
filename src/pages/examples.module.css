@@ -101,6 +101,7 @@
   flex-direction: column;
   min-width: 0;
   background: var(--ifm-background-color);
+  position: relative;
 }
 
 .editorHeader {
@@ -113,10 +114,33 @@
   flex-shrink: 0;
 }
 
+.editorTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
 .editorTitle {
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--ifm-font-color-base);
+}
+
+.previewButton {
+  padding: 0.2rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #fff;
+  background: var(--ifm-color-primary);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.previewButton:hover {
+  background: var(--ifm-color-primary-dark);
 }
 
 .editorDescription {
@@ -146,6 +170,63 @@
   height: 100%;
   color: var(--ifm-font-color-secondary);
   font-size: 0.9rem;
+}
+
+.previewOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.previewModal {
+  width: 90%;
+  height: 85%;
+  max-width: 960px;
+  background: var(--ifm-background-color);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.previewHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ifm-font-color-base);
+  background: var(--ifm-background-surface-color, #16213e);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+}
+
+.previewClose {
+  background: none;
+  border: none;
+  color: var(--ifm-font-color-secondary);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.1rem 0.3rem;
+  line-height: 1;
+  border-radius: 4px;
+}
+
+.previewClose:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--ifm-font-color-base);
+}
+
+.previewBody {
+  flex: 1;
+  min-height: 0;
+  position: relative;
 }
 
 /* Mobile: stack sidebar above editor */
