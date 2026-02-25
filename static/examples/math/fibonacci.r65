@@ -1,0 +1,26 @@
+// Fibonacci sequence using zeropage scratch variables
+//
+// Zeropage (direct page) access is the fastest memory
+// on the 65816 — 1 cycle faster than absolute addressing.
+
+#[zeropage]
+static mut FIB_A: u8;
+
+#[zeropage]
+static mut FIB_B: u8;
+
+#[zeropage]
+static mut FIB_N: u8;
+
+fn fibonacci(n @ A: u8) -> u8 {
+    FIB_A = 0;
+    FIB_B = 1;
+    FIB_N = n;
+    while FIB_N > 0 {
+        let temp @ A = FIB_B;
+        FIB_B = FIB_A + FIB_B;
+        FIB_A = temp;
+        FIB_N--;
+    }
+    return FIB_A;
+}

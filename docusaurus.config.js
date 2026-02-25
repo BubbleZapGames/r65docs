@@ -64,6 +64,11 @@ const config = {
             position: 'left',
           },
           {
+            to: '/examples',
+            label: 'Examples',
+            position: 'left',
+          },
+          {
             href: 'https://github.com/BubbleZapGames/r65docs',
             label: 'GitHub',
             position: 'right',

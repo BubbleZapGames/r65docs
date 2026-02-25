@@ -1,0 +1,174 @@
+.examples {
+  display: flex;
+  height: calc(100vh - 60px);
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 280px;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--ifm-background-color);
+  overflow-y: auto;
+}
+
+.sidebarHeader {
+  padding: 0.75rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ifm-font-color-secondary);
+  background: var(--ifm-background-surface-color, #16213e);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+}
+
+.category {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.categoryHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ifm-font-color-base);
+  cursor: pointer;
+  user-select: none;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+}
+
+.categoryHeader:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.chevron {
+  display: inline-block;
+  font-size: 0.6rem;
+  transition: transform 0.15s ease;
+  color: var(--ifm-font-color-secondary);
+}
+
+.chevronOpen {
+  transform: rotate(90deg);
+}
+
+.exampleList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.exampleItem {
+  display: block;
+  width: 100%;
+  padding: 0.45rem 1rem 0.45rem 1.75rem;
+  font-size: 0.8rem;
+  color: var(--ifm-font-color-secondary);
+  cursor: pointer;
+  background: none;
+  border: none;
+  text-align: left;
+  line-height: 1.4;
+}
+
+.exampleItem:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ifm-font-color-base);
+}
+
+.exampleItemActive {
+  background: var(--ifm-color-primary-lightest, rgba(37, 194, 160, 0.1));
+  color: var(--ifm-color-primary);
+  font-weight: 500;
+}
+
+.exampleItemActive:hover {
+  background: var(--ifm-color-primary-lightest, rgba(37, 194, 160, 0.15));
+}
+
+.mainPane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--ifm-background-color);
+}
+
+.editorHeader {
+  padding: 0.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  background: var(--ifm-background-surface-color, #16213e);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+}
+
+.editorTitle {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ifm-font-color-base);
+}
+
+.editorDescription {
+  font-size: 0.75rem;
+  color: var(--ifm-font-color-secondary);
+}
+
+.editorContent {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: calc(100vh - 60px);
+  color: var(--ifm-font-color-secondary);
+  font-size: 1.1rem;
+}
+
+.emptyState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--ifm-font-color-secondary);
+  font-size: 0.9rem;
+}
+
+/* Mobile: stack sidebar above editor */
+@media (max-width: 768px) {
+  .examples {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    min-width: 100%;
+    max-height: 40vh;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .mainPane {
+    flex: 1;
+    min-height: 0;
+  }
+}
+
+/* Hide Docusaurus footer on examples page */
+:global(.examples-page .footer) {
+  display: none;
+}

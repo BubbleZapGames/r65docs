@@ -1,0 +1,24 @@
+// Interrupt handlers — the compiler generates all the
+// register save/restore code automatically.
+//
+// #[interrupt(nmi)] emits: PHP, PHB, PHA, PHX, PHY,
+// then your code, then PLY, PLX, PLA, PLB, PLP, RTI.
+
+#[zeropage]
+static mut FRAME_COUNT: u16;
+
+#[zeropage]
+static mut NMI_READY: u8;
+
+#[interrupt(nmi)]
+fn vblank() {
+    FRAME_COUNT++;
+    NMI_READY = 1;
+}
+
+fn wait_for_vblank() {
+    NMI_READY = 0;
+    while NMI_READY == 0 {
+        asm!("WAI");
+    }
+}

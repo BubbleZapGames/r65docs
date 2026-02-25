@@ -1,0 +1,42 @@
+// Quicksort implementation demonstrating arrays,
+// structs, enums, and recursive function calls.
+
+enum Suit {
+    Spades = 0,
+    Hearts,
+    Diamonds,
+    Clubs,
+}
+
+struct Card {
+    suit: u8,
+    rank: u8,
+}
+
+#[ram]
+static mut HAND: [Card; 8];
+
+#[zeropage]
+static mut TEMP_CARD: Card;
+
+fn card_value(idx @ A: u8) -> u8 {
+    let i @ X = idx as u16;
+    // 13 = 8 + 4 + 1; use shifts since * only works with powers of 2
+    let suit @ A = HAND[X].suit;
+    let val @ A = suit * 8 + suit * 4 + suit + HAND[X].rank;
+    return val;
+}
+
+fn swap_cards(i @ A: u8, j: u8) {
+    let ix @ X = i as u16;
+    TEMP_CARD.suit = HAND[X].suit;
+    TEMP_CARD.rank = HAND[X].rank;
+
+    let jx @ X = j as u16;
+    let ia @ X = i as u16;
+    HAND[ia as u16].suit = HAND[jx as u16].suit;
+    HAND[ia as u16].rank = HAND[jx as u16].rank;
+
+    HAND[jx as u16].suit = TEMP_CARD.suit;
+    HAND[jx as u16].rank = TEMP_CARD.rank;
+}

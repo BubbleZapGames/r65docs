@@ -1,0 +1,65 @@
+// State machine pattern for game entity AI.
+// Common in SNES games for enemy behavior.
+
+enum AIState {
+    Idle = 0,
+    Patrol,
+    Chase,
+    Attack,
+    Flee,
+}
+
+struct Enemy {
+    x: u8,
+    y: u8,
+    state: u8,
+    timer: u8,
+    health: u8,
+}
+
+#[ram]
+static mut ENEMIES: [Enemy; 4];
+
+#[zeropage]
+static mut PLAYER_X: u8;
+
+#[zeropage]
+static mut PLAYER_Y: u8;
+
+fn enemy_idle(idx @ X: u16) {
+    ENEMIES[X].timer--;
+    if ENEMIES[X].timer == 0 {
+        ENEMIES[X].state = AIState::Patrol as u8;
+        ENEMIES[X].timer = 60;
+    }
+}
+
+fn enemy_patrol(idx @ X: u16) {
+    ENEMIES[X].x++;
+    ENEMIES[X].timer--;
+    if ENEMIES[X].timer == 0 {
+        ENEMIES[X].state = AIState::Idle as u8;
+        ENEMIES[X].timer = 30;
+    }
+}
+
+fn enemy_flee(idx @ X: u16) {
+    if ENEMIES[X].x > PLAYER_X {
+        ENEMIES[X].x++;
+    } else {
+        ENEMIES[X].x--;
+    }
+}
+
+fn update_enemy(idx @ A: u8) {
+    let i @ X = idx as u16;
+    let state @ A = ENEMIES[X].state;
+
+    if state == AIState::Idle as u8 {
+        enemy_idle(i);
+    } else if state == AIState::Patrol as u8 {
+        enemy_patrol(i);
+    } else if state == AIState::Flee as u8 {
+        enemy_flee(i);
+    }
+}

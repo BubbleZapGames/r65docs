@@ -1,0 +1,39 @@
+// Enums and structs — packed, no padding, no overhead.
+//
+// Structs are laid out in declaration order with no
+// alignment padding. Enums are C-style integer constants.
+
+enum Direction {
+    North = 0,
+    East,
+    South,
+    West,
+}
+
+struct Entity {
+    x: u8,
+    y: u8,
+    facing: u8,
+    health: u8,
+}
+
+#[ram]
+static mut PLAYER: Entity = Entity {
+    x: 128,
+    y: 112,
+    facing: 0,
+    health: 100,
+};
+
+fn move_player(dir @ A: u8) {
+    if dir == Direction::North as u8 {
+        PLAYER.y--;
+    } else if dir == Direction::South as u8 {
+        PLAYER.y++;
+    } else if dir == Direction::East as u8 {
+        PLAYER.x++;
+    } else if dir == Direction::West as u8 {
+        PLAYER.x--;
+    }
+    PLAYER.facing = dir;
+}
