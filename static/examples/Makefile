@@ -34,6 +34,7 @@ all: $(SMC_TARGETS)
 	@echo "[LINK] $@"
 	@printf '[objects]\n%s\n' "$(BUILD_DIR)/$(<:.r65=.o)" > $(BUILD_DIR)/$(<:.r65=.link)
 	@$(WLA_LINK) -S $(BUILD_DIR)/$(<:.r65=.link) $@
+	@truncate -s 32768 $@
 
 clean:
 	@echo "[CLEAN] Removing build artifacts and ROMs..."

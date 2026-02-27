@@ -23,38 +23,15 @@
       ]
     },
     {
-      "name": "Data Structures",
+      "name": "Graphics",
       "examples": [
         {
-          "id": "enum_struct",
-          "name": "Enum + Struct",
-          "description": "Data types with hardware-mapped storage",
-          "file": "data-structures/enum_struct.r65"
-        },
-        {
-          "id": "array_sorting",
-          "name": "Array Sorting",
-          "description": "Quicksort with structs and enums",
-          "file": "data-structures/array_sorting.r65"
-        },
-        {
-          "id": "state_machine",
-          "name": "State Machine",
-          "description": "Entity AI with state transitions",
-          "file": "data-structures/state_machine.r65"
+          "id": "irisHDMA",
+          "name": "Iris Animation",
+          "description": "Iris animation using HDMA and window clipping",
+          "file": "graphics/irisHDMA.r65"
         }
       ]
     },
-    {
-      "name": "Hardware",
-      "examples": [
-        {
-          "id": "interrupt_handler",
-          "name": "Interrupt Handler",
-          "description": "NMI vblank interrupt with auto save/restore",
-          "file": "hardware/interrupt_handler.r65"
-        }
-      ]
-    }
   ]
 }
