@@ -30,8 +30,20 @@
           "name": "Iris Animation",
           "description": "Iris animation using HDMA and window clipping",
           "file": "graphics/irisHDMA.r65"
+        },
+        {
+          "id": "mosaicFade",
+          "name": "Mosaic Fade",
+          "description": "Cycling mosaic pixelation on rainbow color bars",
+          "file": "graphics/mosaicFade.r65"
+        },
+        {
+          "id": "walkCycle",
+          "name": "Walk Cycle",
+          "description": "Sprite walk cycle with D-pad controlled directional animation",
+          "file": "graphics/walk.r65"
         }
       ]
-    },
+    }
   ]
 }

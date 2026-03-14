@@ -7,8 +7,8 @@ WLA = wla-65816
 WLA_LINK = wlalink
 
 # Flags
-R65C_FLAGS = --cfg snes -I ~/R65/stdlib
-WLA_FLAGS = -o
+R65C_FLAGS = --cfg snes -I ~/R65/stdlib -I assets
+WLA_FLAGS = -I assets -o 
 
 # Build directory for intermediates
 BUILD_DIR = build
@@ -30,11 +30,11 @@ all: $(SMC_TARGETS)
 	@echo "[R65C] $<"
 	@$(R65C) $< -o $(BUILD_DIR)/$(<:.r65=.asm) $(R65C_FLAGS)
 	@echo "[WLA]  $(BUILD_DIR)/$(<:.r65=.asm)"
-	@$(WLA) $(WLA_FLAGS) $(BUILD_DIR)/$(<:.r65=.o) $(BUILD_DIR)/$(<:.r65=.asm)
+	$(WLA) $(WLA_FLAGS) $(BUILD_DIR)/$(<:.r65=.o) $(BUILD_DIR)/$(<:.r65=.asm)
 	@echo "[LINK] $@"
 	@printf '[objects]\n%s\n' "$(BUILD_DIR)/$(<:.r65=.o)" > $(BUILD_DIR)/$(<:.r65=.link)
 	@$(WLA_LINK) -S $(BUILD_DIR)/$(<:.r65=.link) $@
-	@truncate -s 32768 $@
+#	@truncate -s 32768 $@
 
 clean:
 	@echo "[CLEAN] Removing build artifacts and ROMs..."
