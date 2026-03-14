@@ -1,0 +1,371 @@
+// walkCycle - Sprite Walk Cycle Demo
+// 32x32 character sprite with directional walk animations
+// D-pad controls direction, release to return to rest pose
+
+#[snesrom(name="WALK CYCLE")]
+#[bank(0)]
+
+include!("sneslib.r65")
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+// Sprite tile numbers (32x32 sprites in 128px-wide VRAM layout)
+// Each 32x32 = 4x4 8x8 tiles. Rows of 32px = 64 tile numbers apart.
+const SPR_REST_SOUTH: u16 = 0;     // Sprite 0: rest/default (facing south)
+const SPR_REST_NORTH: u16 = 4;     // Sprite 1: rest facing north
+const SPR_WALK_N0: u16 = 8;        // Sprite 2: walk north frame 0
+const SPR_WALK_N1: u16 = 12;       // Sprite 3: walk north frame 1
+const SPR_WALK_E0: u16 = 64;       // Sprite 4: walk east frame 0
+const SPR_WALK_E1: u16 = 68;       // Sprite 5: walk east frame 1
+const SPR_WALK_E2: u16 = 72;       // Sprite 6: walk east frame 2
+const SPR_WALK_E3: u16 = 76;       // Sprite 7: walk east frame 3
+const SPR_WALK_S0: u16 = 128;      // Sprite 8: walk south frame 0
+const SPR_WALK_S1: u16 = 132;      // Sprite 9: walk south frame 1
+const SPR_WALK_S2: u16 = 136;      // Sprite 8: walk south frame 2
+const SPR_WALK_S3: u16 = 140;      // Sprite 9: walk south frame 3
+
+
+// Sprite attribute: palette 0, priority 2 (in front of BG)
+const SPR_ATTR: u16 = SPR_PRIORITY_2;
+
+// Animation timing
+const ANIM_SPEED: u8 = 8;          // Frames per animation step
+const WALK_SPEED: u8 = 1;          // Pixels per frame
+
+// Screen center for character start position
+const START_X: u8 = 112;
+const START_Y: u8 = 96;
+
+// Movement bounds
+const MIN_X: u8 = 4;
+const MAX_X: u8 = 220;
+const MIN_Y: u8 = 4;
+const MAX_Y: u8 = 192;
+
+// Direction states
+enum Direction { None = 0, North, South, East, West }
+
+// ============================================================================
+// ANIMATION TABLES
+// ============================================================================
+
+// Walk north: 2 frames, alternating
+static ANIM_WALK_NORTH: [u16; 4] = [
+    SPR_WALK_N0 | SPR_ATTR,
+    SPR_WALK_N1 | SPR_ATTR,
+    SPR_WALK_N0 | SPR_ATTR,
+    SPR_WALK_N1 | SPR_ATTR
+];
+
+// Walk south: 2 frames, alternating
+static ANIM_WALK_SOUTH: [u16; 4] = [
+    SPR_WALK_S0 | SPR_ATTR,
+    SPR_WALK_S1 | SPR_ATTR,
+    SPR_WALK_S2 | SPR_ATTR,
+    SPR_WALK_S3 | SPR_ATTR
+];
+
+// Walk east: 4 frames
+static ANIM_WALK_EAST: [u16; 4] = [
+    SPR_WALK_E0 | SPR_ATTR,
+    SPR_WALK_E1 | SPR_ATTR,
+    SPR_WALK_E2 | SPR_ATTR,
+    SPR_WALK_E3 | SPR_ATTR
+];
+
+// Walk west: 4 frames (east sprites, horizontally flipped)
+static ANIM_WALK_WEST: [u16; 4] = [
+    SPR_WALK_E0 | SPR_ATTR | SPR_HFLIP,
+    SPR_WALK_E1 | SPR_ATTR | SPR_HFLIP,
+    SPR_WALK_E2 | SPR_ATTR | SPR_HFLIP,
+    SPR_WALK_E3 | SPR_ATTR | SPR_HFLIP
+];
+
+// Bit masks for OAM extended table manipulation
+static OAM_BIT_MASKS: [u8; 8] = [0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80];
+
+// ============================================================================
+// RAM VARIABLES
+// ============================================================================
+
+#[lowram]
+static mut oam_buffer: [u8; 544];
+
+#[lowram]
+static mut char_x: u8;
+
+#[lowram]
+static mut char_y: u8;
+
+#[lowram]
+static mut direction: u8;
+
+#[lowram]
+static mut last_dir: u8;
+
+#[lowram]
+static mut anim_frame: u8;
+
+#[lowram]
+static mut anim_timer: u8;
+
+#[lowram]
+static mut cur_tile: u16;
+
+#[lowram]
+static mut frame_cnt: u16;
+
+// ============================================================================
+// OAM FUNCTIONS
+// ============================================================================
+
+// Clear OAM buffer: all sprites off-screen
+fn oam_clear() {
+    let i: u16 = 0;
+    loop {
+        oam_buffer[i] = 0;       // X
+        i++;
+        oam_buffer[i] = 240;     // Y (off-screen)
+        i++;
+        oam_buffer[i] = 0;       // Tile
+        i++;
+        oam_buffer[i] = 0;       // Attr
+        i++;
+        if i >= 512 { break; }
+    }
+    // Clear extended OAM
+    loop {
+        oam_buffer[i] = 0;
+        i++;
+        if i >= 544 { break; }
+    }
+}
+
+// Set sprite entry in OAM buffer
+fn oam_spr(x: u8, y: u8, tile: u16, off: u16) {
+    oam_buffer[off] = x;
+    oam_buffer[off + 1] = y;
+    oam_buffer[off + 2] = tile as u8;
+    oam_buffer[off + 3] = (tile >> 8) as u8;
+}
+
+// Set sprite size bit in extended OAM (1 = large, 0 = small)
+fn oam_size(off: u16, size: u8) {
+    let ext_off: u16 = 512 + (off >> 4);
+    let bit_pos: u8 = (((off >> 2) & 3) * 2 + 1) as u8;
+    let ext_val: u8 = oam_buffer[ext_off];
+    let mask: u8 = OAM_BIT_MASKS[bit_pos];
+    if size != 0 {
+        ext_val = ext_val | mask;
+    } else {
+        ext_val = ext_val & (~mask);
+    }
+    oam_buffer[ext_off] = ext_val;
+}
+
+// ============================================================================
+// NMI HANDLER - DMA OAM buffer to PPU every frame
+// ============================================================================
+
+#[interrupt(nmi)]
+fn nmi_handler() {
+    let _ @ A: u8 = RDNMI;
+
+    // DMA OAM buffer to PPU (channel 7)
+    OAMADDL = 0;
+    OAMADDH = 0;
+    DMAP7 = 0x00;       // 1 register, write once, increment
+    BBAD7 = 0x04;       // $2104 = OAMDATA
+    A1T7L = (&oam_buffer as u16) as u8;
+    A1T7H = ((&oam_buffer as u16) >> 8) as u8;
+    A1B7 = 0x00;        // Bank 0 (lowram)
+    DAS7L = 0x20;       // 544 bytes ($0220)
+    DAS7H = 0x02;
+    MDMAEN = 0x80;      // Trigger channel 7
+
+    frame_cnt++;
+}
+
+// ============================================================================
+// SETUP FUNCTIONS
+// ============================================================================
+
+// Upload sprite tiles to VRAM OBJ area ($6000)
+fn uploadSpriteTiles() {
+    dma_copy_vram_const!(0, SPRITE_DATA, VRAM_OBJ_TILES, 6144);
+}
+
+// Upload sprite palette to CGRAM (sprite palettes start at color 128)
+fn uploadSpritePalette() {
+    dma_copy_cgram_const!(0, PALETTE_DATA, 128, 12);
+}
+
+// Upload BG1 tiles to VRAM $0000 and tilemap to $7000
+fn uploadBackground() {
+    // BG tiles: 882 tiles × 32 bytes = 28224 bytes at VRAM $0000
+    dma_copy_vram_const!(0, BG_CHR_DATA, VRAM_BG1_TILES, 28224);
+
+    // BG palette: 16 colors at CGRAM 0 (BG palette 0)
+    dma_copy_cgram_const!(0, BG_PAL_DATA, 0, 16);
+
+    // BG tilemap: 896 entries (32×28) at VRAM $7000
+    // Upload tilemap data, then fill remaining 4 rows with tile 0
+    dma_copy_vram_const!(0, BG_TILEMAP, VRAM_BG1_MAP, 1792);
+
+    // Fill bottom 4 rows (128 entries × 2 bytes = 256 bytes) with 0
+    VMAIN = VMAIN_INCREMENT_HIGH | VMAIN_INCREMENT_1;
+    set_vram_addr!(0x7380);  // $7000 + 896 = $7380
+    let i: u16 = 0;
+    while i < 128 {
+        VMDATAL = 0;
+        VMDATAH = 0;
+        i++;
+    }
+}
+
+// ============================================================================
+// ANIMATION LOGIC
+// ============================================================================
+
+fn updateAnimation() {
+    if direction == Direction::None {
+        anim_timer = 0;
+        anim_frame = 0;
+        if last_dir == Direction::North {
+            cur_tile = SPR_REST_NORTH | SPR_ATTR;
+        } else if last_dir == Direction::West {
+            cur_tile = SPR_REST_SOUTH | SPR_ATTR | SPR_HFLIP;
+        } else {
+            cur_tile = SPR_REST_SOUTH | SPR_ATTR;
+        }
+    } else {
+        anim_timer++;
+        if anim_timer >= ANIM_SPEED {
+            anim_timer = 0;
+            anim_frame++;
+            if anim_frame >= 4 {
+                anim_frame = 0;
+            }
+        }
+
+        if direction == Direction::North {
+            cur_tile = ANIM_WALK_NORTH[anim_frame];
+        } else if direction == Direction::South {
+            cur_tile = ANIM_WALK_SOUTH[anim_frame];
+        } else if direction == Direction::East {
+            cur_tile = ANIM_WALK_EAST[anim_frame];
+        } else {
+            cur_tile = ANIM_WALK_WEST[anim_frame];
+        }
+    }
+    oam_spr(char_x, char_y, cur_tile, 0);
+    oam_size(0, 1);
+}
+
+// ============================================================================
+// INPUT HANDLING
+// ============================================================================
+
+fn readInput() {
+    wait_autojoy();
+
+    let pad: u16 = (JOY1H as u16) << 8 | (JOY1L as u16);
+    direction = Direction::None;
+
+    // Vertical movement
+    if pad & JOY_UP != 0 {
+        direction = Direction::North;
+        last_dir = Direction::North;
+        if char_y > MIN_Y {
+            char_y = char_y - WALK_SPEED;
+        }
+    } else if pad & JOY_DOWN != 0 {
+        direction = Direction::South;
+        last_dir = Direction::South;
+        if char_y < MAX_Y {
+            char_y = char_y + WALK_SPEED;
+        }
+    }
+
+    // Horizontal movement (independent, enables diagonals)
+    if pad & JOY_LEFT != 0 {
+        direction = Direction::West;
+        last_dir = Direction::West;
+        if char_x > MIN_X {
+            char_x = char_x - WALK_SPEED;
+        }
+    } else if pad & JOY_RIGHT != 0 {
+        direction = Direction::East;
+        last_dir = Direction::East;
+        if char_x < MAX_X {
+            char_x = char_x + WALK_SPEED;
+        }
+    }
+}
+
+// ============================================================================
+// ENTRY POINT
+// ============================================================================
+
+#[entry]
+fn main() -> ! {
+    snes_init();
+    INIDISP = FORCE_BLANK;
+    NMITIMEN = 0;
+
+    // Upload graphics
+    uploadSpriteTiles();
+    uploadSpritePalette();
+    uploadBackground();
+
+    // Configure Mode 1 (4bpp BG1, 4bpp BG2, 2bpp BG3)
+    set_bgmode!(BGMODE_1, 0);
+    set_bg1_map!(0x1C, 0);    // BG1 tilemap at VRAM $7000, 32x32
+    set_bg12_chr!(0, 0);      // BG1 chr at VRAM $0000
+
+    // Configure sprites: 8x8 / 32x32, tiles at VRAM $6000 (base=3)
+    set_obj_sel!(OBJSEL_8X8_32X32, 3, 0);
+
+    // Enable BG1 and sprites on main screen
+    enable_main!(SCREEN_BG1 | SCREEN_OBJ);
+
+    // Initialize state
+    char_x = START_X;
+    char_y = START_Y;
+    direction = Direction::None;
+    last_dir = Direction::South;
+    anim_frame = 0;
+    anim_timer = 0;
+    frame_cnt = 0;
+
+    // Clear OAM
+    oam_clear();
+
+    // Enable display
+    INIDISP = 0x0F;
+    NMITIMEN = NMI_ENABLE | AUTOJOY_ENABLE;
+
+    loop {
+        wait_nmi();
+        readInput();
+
+        updateAnimation();
+    }
+}
+
+// ============================================================================
+// ROM DATA
+// ============================================================================
+
+// Sprite data (bank 1)
+#[bank(1)]
+static PALETTE_DATA: [u8; 24] = include_bytes!("walk.pal");
+static SPRITE_DATA: [u8; 6144] = include_bytes!("walk.chr");
+
+// Background data (banks 2+)
+#[bank(2)]
+static BG_CHR_DATA: [u8; 28224] = include_bytes!("grass_scene.chr");
+static BG_PAL_DATA: [u8; 32] = include_bytes!("grass_scene.pal");
+static BG_TILEMAP: [u8; 1792] = include_bytes!("grass_scene.tilemap");

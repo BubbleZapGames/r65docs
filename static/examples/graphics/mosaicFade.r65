@@ -1,0 +1,114 @@
+// mosaicFade - Mosaic Pixelation Effect
+// Color bars with cycling mosaic levels
+// 2s clear → 2s pixelate up → 2s pixelate down → repeat
+
+#[snesrom(name="MOSAIC FADE",hirom)]
+#[bank(0)]
+
+include!("sneslib.r65")
+
+// Animation timing
+const PAUSE_FRAMES: u16 = 120;  // ~2 seconds at 60fps
+const STEP_FRAMES: u16 = 8;     // 120 / 15 = 8 frames per mosaic level
+
+// Upload 8bpp tiles to VRAM
+fn uploadTiles() {
+    VMAIN = VMAIN_INCREMENT_HIGH | VMAIN_INCREMENT_1;
+    set_vram_addr!(0x0000);
+
+    dma_copy_vram_const!(0, TILE_DATA, VRAM_BG1_TILES, TILE_DATA.len());
+}
+
+// Build tilemap that sequences through all 256 tiles
+fn buildTilemap() {
+    VMAIN = VMAIN_INCREMENT_HIGH | VMAIN_INCREMENT_1;
+    set_vram_addr!(0x7000);
+
+    let tile: u16 = 0;
+    let row: u16 = 0;
+    while row < 32 {
+        let col: u16 = 0;
+        while col < 32 {
+            VMDATAL = tile as u8;
+            VMDATAH = (tile >> 8) as u8;
+            tile++;
+            if tile >= 256 { tile = 0; }
+            col++;
+        }
+        row++;
+    }
+}
+
+#[interrupt(nmi)]
+fn nmi_handler() {
+    A = RDNMI;
+}
+
+#[entry]
+fn main() -> ! {
+    snes_init();
+    INIDISP = FORCE_BLANK;
+    NMITIMEN = 0;
+
+    uploadTiles();
+    buildTilemap();
+
+    // Upload palette
+    dma_copy_cgram_const!(0, PALETTE_DATA, 0, 255);
+
+    // Configure BG1: Mode 3 (8bpp BG1), 8x8 tiles
+    set_bgmode!(BGMODE_3, 0);
+    set_bg1_map!(0x1C, 0);    // Tilemap at VRAM $7000
+    set_bg12_chr!(0, 0);      // Tiles at VRAM $0000
+    enable_main!(SCREEN_BG1);
+
+    // Animation state
+    let phase: u8 = 0;     // 0=pause, 1=ramp up, 2=ramp down
+    let frame: u16 = 0;
+    let level: u8 = 0;     // Mosaic level 0-16 (0=off, 16=max)
+
+    INIDISP = 0x0F;
+    NMITIMEN = AUTOJOY_ENABLE;
+
+    loop {
+        wait_nmi();
+        frame++;
+
+        if phase == 0 {
+            // Pause: show clear image for 2 seconds
+            if frame >= PAUSE_FRAMES {
+                frame = 0;
+                phase = 1;
+            }
+        } else if phase == 1 {
+            // Ramp up: step mosaic every 8 frames
+            if frame >= STEP_FRAMES {
+                frame = 0;
+                level++;
+                if level >= 16 {
+                    level = 16;
+                    phase = 2;
+                }
+            }
+        } else {
+            // Ramp down: step mosaic every 8 frames
+            if frame >= STEP_FRAMES {
+                frame = 0;
+                if level > 0 {
+                    level--;
+                }
+                if level == 0 {
+                    phase = 0;
+                }
+            }
+        }
+
+        set_pixelize(level, SCREEN_BG1 as u16);
+    }
+}
+
+#[bank(1)]
+static PALETTE_DATA: [u8; 512] = include_bytes!("controls_screen.pal");
+static TILE_DATA: [u8; 49152] = include_bytes!("controls_screen.chr");
+
+
