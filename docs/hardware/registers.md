@@ -336,3 +336,61 @@ fn careful(input @ A: u8) -> u8 {
 
 Valid registers for `#[preserves]`: `A`, `X`, `Y`, `STATUS`, `D`, `DBR`.
 Invalid: `B` (part of A), `PBR` (read-only), `S` (managed by call convention).
+
+## Register Allocation
+
+R65's register allocation prioritizes **explicit programmer control** and **predictable code generation** over automatic optimization. The compiler follows programmer directives to generate assembly that matches hand-written patterns.
+
+### Allocation Priority
+
+1. **Explicit hardware register aliases** (`let x @ A = expr`) — mandatory, highest priority
+2. **Explicit memory locations** (`#[zeropage(0x20)] static mut VAR: u8`) — fixed, no allocation needed
+3. **Scratch registers** — compiler-managed zero-page temporaries
+4. **Stack** — fallback when no scratch space available
+
+The compiler does not automatically assign values to hardware registers — use explicit aliases.
+
+### Scratch Registers
+
+Mark zero-page locations as compiler-managed scratch space with the `register` attribute:
+
+```rust
+#[zeropage(0x10, register)]
+static mut SCRATCH0: u8;
+
+#[zeropage(0x11, register)]
+static mut SCRATCH1: u8;
+
+#[zeropage(0x12, register)]
+static mut SCRATCH2: u16;    // Takes 0x12-0x13
+```
+
+**Function-local**: Different functions can reuse the same scratch locations without conflict.
+
+**Not preserved across calls**: Scratch registers are caller-save. Using a scratch-allocated value after a function call is a compile error.
+
+**No direct access**: Programmer cannot read or write scratch registers directly. Only the compiler allocates to them.
+
+The compiler selects appropriately-sized scratch registers (u8, u16, pointer). Provide **8-16 bytes** of scratch space for typical programs.
+
+### Internal Pipeline
+
+The allocation pipeline works in stages:
+
+1. **Virtual registers**: MIR assigns all values to virtual registers (VRegs)
+2. **Slot allocation**: Determines physical locations — HW-coalesceable VRegs stay in hardware registers; others get stack slots
+3. **Register allocation**: Maps VRegs to physical locations (hardware registers or stack offsets)
+4. **Code generation**: Instruction selectors emit loads/stores based on physical locations
+
+The slot allocator uses a two-pass HW coalescence approach: Pass 1 finds VRegs where the hardware register is unclobbered between definition and last use, then Pass 2 re-checks remaining candidates treating Pass 1 coalesceable moves as no-ops, enabling cascading coalescence.
+
+### Access Speed
+
+| Location | Access Speed |
+|----------|-------------|
+| Hardware registers (A, X, Y) | 2 cycles |
+| Zero-page scratch | 3-4 cycles |
+| RAM | 4-5 cycles |
+| Stack | 5-8 cycles |
+
+Zero-page scratch is nearly as fast as hardware registers and represents the best trade-off between speed and availability.

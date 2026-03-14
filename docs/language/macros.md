@@ -323,6 +323,29 @@ include!("hardware.r65")
 - Circular inclusions are a compile error.
 - The included file is parsed and expanded as if its contents were written inline at the inclusion point.
 
+## Method Macros
+
+Macros can be defined inside `impl` blocks for structs, creating **method macros** that are scoped to that struct type. The macro body can use `self` to refer to the receiver:
+
+```rust
+impl far Console {
+    macro_rules! print($fmt:literal, $($args:expr),*) {
+        format!(__buf, $fmt, $($args),*);
+        self.print(&__buf as far *u8);
+    }
+}
+```
+
+Invoke with dot notation and `!`:
+
+```rust
+my_console.print!("Score: {u16}", score);
+```
+
+When the macro is expanded, every `self` token in the body is replaced with the receiver expression (here, `my_console`). The result is then expanded as a normal macro. Method macros are only callable on instances of the struct they are defined on.
+
+See [Structs — Method Macros](structs.md#method-macros) for more examples.
+
 ## Scope and Visibility
 
 ### Global Scope

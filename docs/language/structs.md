@@ -35,20 +35,88 @@ struct Player { x: u8, y: u8, health: u16 }
 
 There are no alignment requirements. A `u16` field at an odd offset is valid and incurs no penalty on the 65816 (which has no alignment constraints).
 
-## No Methods or Impl Blocks
+## Methods and Impl Blocks
 
-Structs cannot have methods. There are no `impl` blocks for adding inherent methods to a struct. Use free functions that take a pointer to the struct instead:
+Structs can have methods defined in `impl` blocks. Methods receive `*self` (a pointer to the struct instance) as their first parameter:
 
 ```rust
 struct Player { x: u8, y: u8, health: u16 }
 
-// Free function operating on a Player pointer
-fn damage_player(player: *Player, amount @ A: u8) {
-    player.health = player.health - amount as u16;
+impl Player {
+    fn get_x(*self) -> u8 {
+        return self.x;
+    }
+
+    fn take_damage(*self, amount @ A: u8) {
+        self.health = self.health - amount as u16;
+    }
 }
 ```
 
-The exception is `impl Trait for Struct` blocks, which define trait method implementations (see [Traits](traits.md)).
+Call methods with dot notation on a struct variable or pointer:
+
+```rust
+#[zeropage]
+static mut PLAYER: Player;
+
+PLAYER.take_damage(5);    // Compiler passes &PLAYER as self
+let x = PLAYER.get_x();
+```
+
+Use `impl far` for methods that operate on far pointers:
+
+```rust
+impl far Player {
+    fn update(far *self) {
+        self.health = self.health - 1;
+    }
+}
+```
+
+Under the hood, methods are mangled to free functions (e.g., `Player__take_damage`) with self as the first stack-passed argument.
+
+### Associated Constants
+
+`impl` blocks can also define associated constants, accessed with `::` syntax:
+
+```rust
+impl Player {
+    const MAX_HEALTH: u8 = 100;
+}
+
+if PLAYER.health > Player::MAX_HEALTH {
+    PLAYER.health = Player::MAX_HEALTH;
+}
+```
+
+### Method Macros
+
+`impl` blocks can contain `macro_rules!` definitions that act as scoped method macros. Inside the macro body, `self` refers to the receiver the macro is called on:
+
+```rust
+impl far Console {
+    macro_rules! print($fmt:literal, $($args:expr),*) {
+        format!(__console_fmt_buf, $fmt, $($args),*);
+        self.print(&__console_fmt_buf as far *u8);
+    }
+
+    macro_rules! println($fmt:literal, $($args:expr),*) {
+        format!(__console_fmt_buf, $fmt, $($args),*);
+        self.print_line(&__console_fmt_buf as far *u8);
+    }
+}
+```
+
+Invoke method macros with `receiver.name!(args)`:
+
+```rust
+my_console.print!("Score: {u16}", score);
+my_console.println!("Level: {u8}", level);
+```
+
+During expansion, `self` in the macro body is replaced with the receiver expression (`my_console` in this case), then the body is expanded as a regular macro. See [Macros](macros.md#method-macros) for more details.
+
+Trait implementations also use `impl` blocks — see [Traits](traits.md).
 
 ## Declaration
 
