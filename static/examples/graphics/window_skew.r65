@@ -56,10 +56,10 @@ fn setupBackground() {
     dma_copy_vram_const!(1, BG_TILEMAP, VRAM_BG1_MAP, 2048);
     dma_copy_cgram_const!(2, BG_PAL_DATA, 0, 16);
 
-    set_bgmode!(BGMODE_1, 0);
+    set_bgmode!(BG::Mode1, 0);
     set_bg1_map!(0x1C, 0);
     set_bg12_chr!(0, 0);
-    enable_main!(SCREEN_BG1);
+    enable_main!(Screen::BG1);
 }
 
 // Configure HDMA channel 0 for per-scanline BG1 horizontal scroll.
@@ -89,7 +89,7 @@ fn main() -> ! {
 
     enable_hdma!(0x01);
     INIDISP = 0x0F;
-    NMITIMEN = AUTOJOY_ENABLE;
+    NMITIMEN = Interrupt::AutoJoy;
 
     loop {
         wait_nmi();

@@ -19,9 +19,12 @@ R65_SOURCES := $(shell find . -name '*.r65' -not -path './$(BUILD_DIR)/*')
 # Derive .smc targets: ./basics/hello_registers.r65 -> ./basics/hello_registers.smc
 SMC_TARGETS := $(R65_SOURCES:.r65=.smc)
 
+# Derive .zip targets from .smc targets
+ZIP_TARGETS := $(SMC_TARGETS:.smc=.zip)
+
 # Default target
-all: $(SMC_TARGETS)
-	@echo "Built $(words $(SMC_TARGETS)) ROMs"
+all: $(ZIP_TARGETS)
+	@echo "Built $(words $(ZIP_TARGETS)) ROMs"
 
 # Pattern rule: compile .r65 -> .asm -> .o -> .smc
 # Intermediates go into BUILD_DIR mirroring the source tree
@@ -36,10 +39,16 @@ all: $(SMC_TARGETS)
 	@$(WLA_LINK) -S $(BUILD_DIR)/$(<:.r65=.link) $@
 #	@truncate -s 32768 $@
 
+# Package .smc into .zip
+%.zip: %.smc
+	@echo "[ZIP]  $@"
+	@cd $(dir $<) && zip -j $(abspath $@) $(notdir $<)
+
 clean:
 	@echo "[CLEAN] Removing build artifacts and ROMs..."
 	rm -rf $(BUILD_DIR)
 	find . -name '*.smc' -delete
+	find . -name '*.zip' -delete
 
 list:
 	@echo "Sources:"

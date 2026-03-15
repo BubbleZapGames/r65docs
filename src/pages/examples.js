@@ -222,7 +222,7 @@ function ExamplesInner() {
             </div>
             {showPreview && (
               <PreviewOverlay
-                smcUrl={'/examples/' + activeMeta.file.replace(/\.r65$/, '.smc')}
+                smcUrl={'/examples/' + activeMeta.file.replace(/\.r65$/, '.zip')}
                 exampleName={activeMeta.name}
                 onClose={() => setShowPreview(false)}
               />
