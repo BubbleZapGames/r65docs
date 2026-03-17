@@ -28,7 +28,7 @@ const SPR_WALK_S3: u16 = 140;      // Sprite 9: walk south frame 3
 
 
 // Sprite attribute: palette 0, priority 2 (in front of BG)
-const SPR_ATTR: u16 = SPR_PRIORITY_2;
+const SPR_ATTR: u16 = OamPriority::High as u16;
 
 // Animation timing
 const ANIM_SPEED: u8 = 8;          // Frames per animation step
@@ -73,10 +73,10 @@ static ANIM_WALK_EAST: [u16; 4] = [
 
 // Walk west: 4 frames (east sprites, horizontally flipped)
 static ANIM_WALK_WEST: [u16; 4] = [
-    SPR_WALK_E0 | SPR_ATTR | SPR_HFLIP,
-    SPR_WALK_E1 | SPR_ATTR | SPR_HFLIP,
-    SPR_WALK_E2 | SPR_ATTR | SPR_HFLIP,
-    SPR_WALK_E3 | SPR_ATTR | SPR_HFLIP
+    SPR_WALK_E0 | SPR_ATTR | OamFlip::VH as u16,
+    SPR_WALK_E1 | SPR_ATTR | OamFlip::VH as u16,
+    SPR_WALK_E2 | SPR_ATTR | OamFlip::VH as u16,
+    SPR_WALK_E3 | SPR_ATTR | OamFlip::VH as u16 
 ];
 
 // Bit masks for OAM extended table manipulation
@@ -167,12 +167,12 @@ fn oam_size(off: u16, size: u8) {
 
 #[interrupt(nmi)]
 fn nmi_handler() {
-    let _ @ A: u8 = RDNMI;
 
     // DMA OAM buffer to PPU (channel 7)
     dma_copy_oam_const!(7, oam_buffer, 544);
 
     frame_cnt++;
+    A = RDNMI;
 }
 
 // ============================================================================
@@ -202,7 +202,7 @@ fn uploadBackground() {
     dma_copy_vram_const!(0, BG_TILEMAP, VRAM_BG1_MAP, 2048);
 
     // Fill bottom 4 rows (128 entries × 2 bytes = 256 bytes) with 0
-    VMAIN = VMAIN_INCREMENT_HIGH | VMAIN_INCREMENT_1;
+    VMAIN = VmainTrigger::High;
     set_vram_addr!(0x7380);  // $7000 + 896 = $7380
     let i: u16 = 0;
     while i < 128 {
@@ -223,7 +223,7 @@ fn updateAnimation() {
         if last_dir == Direction::North {
             cur_tile = SPR_REST_NORTH | SPR_ATTR;
         } else if last_dir == Direction::West {
-            cur_tile = SPR_REST_SOUTH | SPR_ATTR | SPR_HFLIP;
+            cur_tile = SPR_REST_SOUTH | SPR_ATTR | OamFlip::VH as u16;
         } else {
             cur_tile = SPR_REST_SOUTH | SPR_ATTR;
         }
@@ -262,13 +262,13 @@ fn readInput() {
     direction = Direction::None;
 
     // Vertical movement
-    if pad & JOY_UP != 0 {
+    if pad & Joy::Up as u16 != 0 {
         direction = Direction::North;
         last_dir = Direction::North;
         if char_y > MIN_Y {
             char_y = char_y - WALK_SPEED;
         }
-    } else if pad & JOY_DOWN != 0 {
+    } else if pad & Joy::Down as u16 != 0 {
         direction = Direction::South;
         last_dir = Direction::South;
         if char_y < MAX_Y {
@@ -277,13 +277,13 @@ fn readInput() {
     }
 
     // Horizontal movement (independent, enables diagonals)
-    if pad & JOY_LEFT != 0 {
+    if pad & Joy::Left as u16 != 0 {
         direction = Direction::West;
         last_dir = Direction::West;
         if char_x > MIN_X {
             char_x = char_x - WALK_SPEED;
         }
-    } else if pad & JOY_RIGHT != 0 {
+    } else if pad & Joy::Right as u16 != 0 {
         direction = Direction::East;
         last_dir = Direction::East;
         if char_x < MAX_X {
@@ -308,15 +308,15 @@ fn main() -> ! {
     uploadBackground();
 
     // Configure Mode 1 (4bpp BG1, 4bpp BG2, 2bpp BG3)
-    set_bgmode!(BGMODE_1, 0);
+    set_bgmode!(BG::Mode1, 0);
     set_bg1_map!(0x1C, 0);    // BG1 tilemap at VRAM $7000, 32x32
     set_bg12_chr!(0, 0);      // BG1 chr at VRAM $0000
 
     // Configure sprites: 8x8 / 32x32, tiles at VRAM $6000 (base=3)
-    set_obj_sel!(OBJSEL_8X8_32X32, 3, 0);
+    set_obj_sel!(ObjSize::T8x8_32x32, 3, 0);
 
     // Enable BG1 and sprites on main screen
-    enable_main!(SCREEN_BG1 | SCREEN_OBJ);
+    set_main_layers!(Screen::BG1 | Screen::Obj);
 
     // Initialize state
     direction = Direction::None;
@@ -330,7 +330,7 @@ fn main() -> ! {
 
     // Enable display
     INIDISP = 0x0F;
-    NMITIMEN = NMI_ENABLE | AUTOJOY_ENABLE;
+    NMITIMEN = Interrupt::Nmi | Interrupt::AutoJoy;
 
     loop {
         wait_nmi();
@@ -350,7 +350,6 @@ static PALETTE_DATA: [u8; 24] = include_bytes!("walk.pal");
 static SPRITE_DATA: [u8; 6144] = include_bytes!("walk.chr");
 
 // Background data (banks 2+)
-#[bank(2)]
 static BG_CHR_DATA: [u8; 17920] = include_bytes!("grass_scene.chr");
 static BG_PAL_DATA: [u8; 22] = include_bytes!("grass_scene.pal");
 static BG_TILEMAP: [u8; 2048] = include_bytes!("grass_scene.tilemap");

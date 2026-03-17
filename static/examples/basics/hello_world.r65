@@ -13,45 +13,35 @@ include!("default_font.r65")
 
 // Console instance in RAM
 #[ram]
-static mut con: Console;
-
-// Palette (4 colors for 2bpp anti-aliased font)
-static PALETTE: [u8; 8] = [
-    0x00, 0x00,  // Color 0: Black (background)
-    0x29, 0x25,  // Color 1: Dark gray
-    0x52, 0x4A,  // Color 2: Light gray (anti-alias)
-    0xFF, 0x7F   // Color 3: White (foreground)
-];
+static mut console: Console;
 
 #[entry]
 fn main() -> ! {
     snes_init();
 
     // Mode 0 (2bpp), tilemap at $0000, chr at $1000
-    set_bgmode!(0, 0);
+    set_bgmode!(BG::Mode0, 0);
     set_bg1_map!(0x00, 0);
     set_bg12_chr!(1, 0);
 
-    // Upload palette
-    set_cgram_addr!(0);
-    for i in 0..8 {
-        CGDATA = PALETTE[i];
-    }
+    // Upload built-in console palette
+    dma_copy_cgram_const!(0, CONSOLE_PALETTE, 0, 4);
 
     // Initialize console in VRAM mode
-    con.init(0);
-    con.set_vram(0x0000);
+    console.init(0);
+    console.set_vram(0x0000);
 
     // Upload default font (95 tiles, ASCII 32-126) at VRAM $1000, tile_base=32
-    con.upload_font(0x1000, 32, &CONSOLE_FONT as far *u8, 95, TileSize::Bpp2);
+    console.upload_font(0x1000, 32, &CONSOLE_FONT, 95, TileSize::Bpp2);
 
     // Print centered on row 14
-    con.set_align(ConsoleAlign::Center);
-    con.set_cursor(0, 14);
-    con.print_line("Hello, World!\0" as far *u8);
+    console.set_align(ConsoleAlign::Center);
+    console.set_cursor(0, 14);
 
-    enable_main!(Screen::BG1);
-    screen_on!(15);
+    console.println("Hello, World!\0");
+
+    set_main_layers!(Screen::BG1);
+    set_brightness!(15);
 
     loop {
         wait_nmi();

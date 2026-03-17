@@ -1,0 +1,294 @@
+// sprite_priority - Sprite Priority Demo
+// 2 wasps orbit a beehive, changing priority (behind/in front) each half-oval.
+// Two animation frames for the wasp. Light blue backdrop.
+
+#[snesrom(name="SPRITE PRIORITY")]
+#[bank(0)]
+
+include!("sneslib.r65")
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+const NUM_SPRITES: u8 = 2;
+
+// Beehive is 64x96 pixels, centered on 256x224 screen
+const HIVE_X: u8 = 96;    // (256 - 64) / 2
+const HIVE_Y: u8 = 64;    // (224 - 96) / 2
+
+// Orbit center = center of beehive
+const CENTER_X: u16 = 128; // 96 + 32
+const CENTER_Y: u16 = 112; // 64 + 48
+
+// Oval radii: wide horizontally, narrow vertically
+const RADIUS_X: u16 = 90;
+const RADIUS_Y: u16 = 25;
+
+// Oval LUTs: sin for X axis (wide), cos for Y axis (narrow)
+const fn build_sin_lut() -> [i16; 256] {
+    let mut t: [i16; 256] = [0; 256];
+    for i in 0..256 {
+        t[i] = fixed_sin(i as u16, 256, RADIUS_X as i16);
+    }
+    return t;
+}
+
+const fn build_cos_lut() -> [i16; 256] {
+    let mut t: [i16; 256] = [0; 256];
+    for i in 0..256 {
+        t[i] = fixed_cos(i as u16, 256, RADIUS_Y as i16);
+    }
+    return t;
+}
+
+static SIN_LUT: [i16; 256] = build_sin_lut();
+static COS_LUT: [i16; 256] = build_cos_lut();
+
+// Per-sprite starting angle (opposite sides of the oval)
+static ANGLE_OFFSET: [u8; 2] = [0, 64];
+
+// Per-sprite orbit speed
+static ORBIT_SPEED: [u8; 2] = [1, 2];
+
+// Wasp tile numbers: 64x64 in 128px-wide VRAM → frame 0 at tile 0, frame 1 at tile 8
+const TILE_FRAME0: u8 = 0;
+const TILE_FRAME1: u8 = 8;
+
+const ANIM_SPEED: u8 = 2;
+
+// Light blue backdrop: BGR555 = 0x7E4A (r=10, g=18, b=31)
+
+// ============================================================================
+// RAM VARIABLES
+// ============================================================================
+
+#[lowram]
+static mut sprites: [OamEntry; 2];
+
+// Current angle for each sprite (0-255 = full circle)
+#[lowram]
+static mut sprite_angle: [u8; 2];
+
+#[lowram]
+static mut anim_timer: u8;
+
+#[lowram]
+static mut anim_frame: u8;
+
+#[lowram]
+static mut frame_cnt: u16;
+
+// ============================================================================
+// NMI HANDLER
+// ============================================================================
+
+#[interrupt(nmi)]
+fn nmi_handler() {
+
+    // Write 2 sprite entries to OAM low table
+    OAMADD = 0;
+    sprites[0].write_oam!(0);
+    sprites[1].write_oam!(1);
+
+    // Write OAM high table: sprites 0-1 = large (64x64)
+    // Each sprite: 2 bits (bit0 = X high, bit1 = size)
+    // Sprite 0: bits 1:0 = 0b10, Sprite 1: bits 3:2 = 0b10 → 0x0A
+    OAMADD = 0x0100;
+    OAMDATA = 0x0A;  // sprites 0-1: large, 2-3: small
+
+    // Remaining 31 bytes: all zero
+    let j: u16 = 0;
+    while j < 31 {
+        OAMDATA = 0;
+        j++;
+    }
+
+    frame_cnt++;
+    A = RDNMI;
+}
+
+// ============================================================================
+// SETUP
+// ============================================================================
+
+fn uploadSpriteTiles() {
+    dma_copy_vram_const!(0, WASPY_CHR, VRAM_OBJ_TILES, 4096);
+}
+
+fn uploadSpritePalette() {
+    // Sprite palette 0 at CGRAM 128
+    dma_copy_cgram_const!(0, WASPY_PAL, 128, 8);
+}
+
+fn uploadBackground() {
+    // BG1 chr at VRAM $0000
+    dma_copy_vram_const!(0, HIVE_CHR, VRAM_BG1_TILES, 2080);
+
+    // BG palette at CGRAM 0
+    dma_copy_cgram_const!(0, HIVE_PAL, 0, 16);
+
+    // Build tilemap: beehive centered on 32x32 tile grid
+    // Beehive = 8x12 tiles, placed at col 12, row 8
+    VMAIN = VmainTrigger::High;
+    set_vram_addr!(VRAM_BG1_MAP);
+
+    let row: u16 = 0;
+    while row < 32 {
+        let col: u16 = 0;
+        while col < 32 {
+            if row >= 8 && row < 20 && col >= 12 && col < 20 {
+                let tm_idx: u16 = (row - 8) * 8 + (col - 12);
+                let lo_idx: u16 = tm_idx * 2;
+                VMDATAL = HIVE_TILEMAP[lo_idx];
+                VMDATAH = HIVE_TILEMAP[lo_idx + 1];
+            } else {
+                VMDATAL = 0;
+                VMDATAH = 0;
+            }
+            col++;
+        }
+        row++;
+    }
+}
+
+fn setBackdropColor() {
+    CGADD = 0;
+    CGDATA = 0x4A;
+    CGDATA = 0x7E;
+}
+
+// ============================================================================
+// SPRITE UPDATE
+// ============================================================================
+
+fn updateSprites() {
+    // Advance animation timer
+    anim_timer++;
+    if anim_timer >= ANIM_SPEED {
+        anim_timer = 0;
+        if anim_frame == 0 {
+            anim_frame = 1;
+        } else {
+            anim_frame = 0;
+        }
+    }
+
+    let tile: u8 = TILE_FRAME0;
+    if anim_frame != 0 {
+        tile = TILE_FRAME1;
+    }
+
+    let i: u16 = 0;
+    while i < NUM_SPRITES as u16 {
+        // Advance angle
+        let ang: u8 = sprite_angle[i] + ORBIT_SPEED[i];
+        sprite_angle[i] = ang;
+
+        // Look up orbit offset
+        let sx: i16 = SIN_LUT[ang];
+        let cy: i16 = COS_LUT[ang];
+
+        // Screen position: center + offset - 32 (half of 64x64 sprite)
+        let px: i16 = CENTER_X as i16 + sx - 32;
+        let py: i16 = CENTER_Y as i16 - cy - 32;
+
+        // Priority: top half of circle (cos > 0) = behind BG, bottom half = in front
+        let attr: u8 = OamPalette::Palette0 as u8;
+        if cy > 0 {
+            attr = attr | OamPriority::Behind as u8;
+        } else {
+            attr = attr | OamPriority::InFront as u8;
+        }
+
+        // Flip based on travel direction: cy < 0 means moving left
+        if cy < 0 {
+            attr = attr | OamFlip::H as u8;
+        }
+
+        sprites[i].set_all!(px as u8, py as u8, tile, attr);
+
+        i++;
+    }
+}
+
+// ============================================================================
+// INIT
+// ============================================================================
+
+fn initSprites() {
+    let i: u16 = 0;
+    while i < NUM_SPRITES as u16 {
+        sprite_angle[i] = ANGLE_OFFSET[i];
+        sprites[i].set!(0, 240, 0);  // off-screen
+        i++;
+    }
+}
+
+// Hide unused OAM entries (12-127) by setting Y off-screen
+fn hideUnusedSprites() {
+    OAMADD = NUM_SPRITES as u16 * 2;
+    let i: u16 = NUM_SPRITES as u16;
+    while i < 128 {
+        OAMDATA = 0;    // X
+        OAMDATA = 240;  // Y off-screen
+        OAMDATA = 0;    // tile
+        OAMDATA = 0;    // attr
+        i++;
+    }
+}
+
+// ============================================================================
+// ENTRY POINT
+// ============================================================================
+
+#[entry]
+fn main() -> ! {
+    snes_init();
+    INIDISP = FORCE_BLANK;
+    NMITIMEN = 0;
+
+    uploadSpriteTiles();
+    uploadSpritePalette();
+    uploadBackground();
+    setBackdropColor();
+
+    // BG Mode 1
+    set_bgmode!(BG::Mode1, 0);
+    set_bg1_map!(0x1C, 0);      // BG1 tilemap at $7000, 32x32
+    set_bg12_chr!(0, 0);        // BG1 chr at $0000
+
+    // Sprites: 8x8 / 64x64, OBJ tiles at VRAM $6000 (base=3)
+    set_obj_sel!(ObjSize::T8x8_64x64, 3, 0);
+
+    // Enable BG1 and sprites on main screen
+    set_main_layers!(Screen::BG1 | Screen::Obj);
+
+    // Init state
+    initSprites();
+    hideUnusedSprites();
+    anim_timer = 0;
+    anim_frame = 0;
+    frame_cnt = 0;
+
+    // Enable display
+    INIDISP = 0x0F;
+    NMITIMEN = Interrupt::Nmi;
+
+    // Main loop
+    loop {
+        wait_nmi();
+        updateSprites();
+    }
+}
+
+// ============================================================================
+// ROM DATA (bank 1)
+// ============================================================================
+
+static WASPY_CHR: [u8; 4096] = include_bytes!("waspy_boi.chr");
+static WASPY_PAL: [u8; 16] = include_bytes!("waspy_boi.pal");
+
+static HIVE_CHR: [u8; 2080] = include_bytes!("beehive.chr");
+static HIVE_PAL: [u8; 32] = include_bytes!("beehive.pal");
+static HIVE_TILEMAP: [u8; 192] = include_bytes!("beehive.tilemap");

@@ -1,0 +1,301 @@
+// mode7 - Mode 7 Top-Down Rotation Demo
+// Flat top-down view with D-pad movement and L/R rotation.
+// HDMA updates M7A and M7D per scanline (required for Mode 7 rendering).
+
+#[snesrom(name="MODE 7 DEMO")]
+
+include!("65816.r65")
+include!("sneslib.r65")
+include!("math.r65")
+
+// Movement
+const SCROLL_SPEED: u16 = 2;
+const ANGLE_SPEED: u16 = 2;
+const SCALE_ONE: u16 = 0x0100;     // 1.0 in 8.8 fixed point
+
+// === Compile-time sin/cos tables ===
+// 256 entries, amplitude 256 (8.8 fixed point where 0x0100 = 1.0)
+
+const fn build_sin_table() -> [i16; 256] {
+    let mut t: [i16; 256] = [0; 256];
+    for i in 0..256 {
+        t[i] = fixed_sin(i as u16, 256, 256);
+    }
+    return t;
+}
+
+const fn build_cos_table() -> [i16; 256] {
+    let mut t: [i16; 256] = [0; 256];
+    for i in 0..256 {
+        t[i] = fixed_cos(i as u16, 256, 256);
+    }
+    return t;
+}
+
+static SIN_TABLE: [i16; 256] = build_sin_table();
+static COS_TABLE: [i16; 256] = build_cos_table();
+
+// === RAM Variables ===
+// Camera position in 8.8 fixed point (high byte = integer pixels, low byte = fraction)
+
+#[zeropage]
+static mut CAMERA_X: u16;
+#[zeropage]
+static mut CAMERA_Y: u16;
+#[zeropage]
+static mut ANGLE: u16;
+
+// HDMA table for M7A and M7B (written together as 2 consecutive write-twice regs)
+// HDMA mode 3: write 2 registers, 2 bytes each → M7A (2 bytes) then M7B (2 bytes)
+// Per scanline: 4 bytes [M7A_lo, M7A_hi, M7B_lo, M7B_hi]
+// 2 chunk headers + 224 scanlines × 4 bytes + terminator
+#[ram]
+static mut HDMA_AB: [u8; 899];
+
+// HDMA table for M7C and M7D
+#[ram]
+static mut HDMA_CD: [u8; 899];
+
+#[bank(0)]
+
+// Upload Mode 7 tile data and tilemap to VRAM.
+fn uploadMode7Vram() {
+    VMAIN = VmainTrigger::High;
+    set_vram_addr!(0x0000);
+
+    // The .map file has 256-byte row stride; Mode 7 tilemap is 128 columns.
+    let map_offset: u16 = 0;
+    let chr_idx: u16 = 0;
+    let row: u16 = 0;
+
+    while row < 128 {
+        let col: u16 = 0;
+        while col < 128 {
+            Y = map_offset + col;
+            VMDATAL = M7_MAP_DATA[Y];
+            Y = chr_idx;
+            VMDATAH = M7_CHR_DATA[Y];
+            chr_idx++;
+            col++;
+        }
+        map_offset = map_offset + 256;
+        row++;
+    }
+}
+
+fn uploadPalette() {
+    dma_copy_cgram_const!(0, M7_PAL_DATA, 0, 256);
+}
+
+// Build HDMA tables for all 4 matrix registers based on current angle.
+// For top-down: M7A=cos, M7B=sin, M7C=-sin, M7D=cos (uniform across scanlines).
+fn buildMatrixTables() {
+    X = ANGLE & 0xFF;
+    let cos_val: i16 = COS_TABLE[X];
+    let sin_val: i16 = SIN_TABLE[X];
+    let neg_sin: i16 = 0 - sin_val;
+
+    let cos_lo: u8 = (cos_val as u16) as u8;
+    let cos_hi: u8 = ((cos_val as u16) >> 8) as u8;
+    let sin_lo: u8 = (sin_val as u16) as u8;
+    let sin_hi: u8 = ((sin_val as u16) >> 8) as u8;
+    let nsin_lo: u8 = (neg_sin as u16) as u8;
+    let nsin_hi: u8 = ((neg_sin as u16) >> 8) as u8;
+
+    let pos: u16 = 0;
+
+    // First chunk: 127 scanlines, continuous mode
+    Y = pos;
+    HDMA_AB[Y] = 0xFF;
+    HDMA_CD[Y] = 0xFF;
+    pos++;
+
+    let scanline: u16 = 0;
+    while scanline < 224 {
+        if scanline == 127 {
+            Y = pos;
+            HDMA_AB[Y] = 0xE1;
+            HDMA_CD[Y] = 0xE1;
+            pos++;
+        }
+
+        // M7A=cos, M7B=sin
+        Y = pos;
+        HDMA_AB[Y] = cos_lo;
+        Y = pos + 1;
+        HDMA_AB[Y] = cos_hi;
+        Y = pos + 2;
+        HDMA_AB[Y] = sin_lo;
+        Y = pos + 3;
+        HDMA_AB[Y] = sin_hi;
+
+        // M7C=-sin, M7D=cos
+        Y = pos;
+        HDMA_CD[Y] = nsin_lo;
+        Y = pos + 1;
+        HDMA_CD[Y] = nsin_hi;
+        Y = pos + 2;
+        HDMA_CD[Y] = cos_lo;
+        Y = pos + 3;
+        HDMA_CD[Y] = cos_hi;
+
+        pos = pos + 4;
+        scanline++;
+    }
+
+    // Terminator
+    Y = pos;
+    HDMA_AB[Y] = 0;
+    HDMA_CD[Y] = 0;
+}
+
+// Set up HDMA channels for Mode 7 matrix.
+fn setupHdma() {
+    // Channel 0: M7A + M7B (two consecutive write-twice registers)
+    // DMAP mode 3: write 2 regs, 2 bytes each = 4 bytes per scanline
+    DMAP0 = 0x03;
+    BBAD0 = 0x1B;       // Start at M7A ($211B), also writes M7B ($211C)
+    dma_set_src!(0, HDMA_AB);
+
+    // Channel 1: M7C + M7D
+    DMAP1 = 0x03;
+    BBAD1 = 0x1D;       // Start at M7C ($211D), also writes M7D ($211E)
+    dma_set_src!(1, HDMA_CD);
+}
+
+// Read input: D-pad moves relative to current facing angle, L/R rotates.
+fn readInput() {
+    wait_autojoy();
+    let pad: u16 = (JOY1H as u16) << 8 | (JOY1L as u16);
+
+    // Rotation
+    if pad & Joy::L as u16 != 0 {
+        ANGLE = ANGLE - ANGLE_SPEED;
+    }
+    if pad & Joy::R as u16 != 0 {
+        ANGLE = ANGLE + ANGLE_SPEED;
+    }
+
+    // Movement relative to facing direction
+    X = ANGLE & 0xFF;
+    let cos_val: i16 = COS_TABLE[X];
+    let sin_val: i16 = SIN_TABLE[X];
+
+    // CAMERA_X/Y are 8.8 fixed point. Add sin/cos directly (~1 px/frame).
+    if pad & Joy::Up as u16 != 0 {
+        CAMERA_X = CAMERA_X - sin_val as u16;
+        CAMERA_Y = CAMERA_Y - cos_val as u16;
+    }
+    if pad & Joy::Down as u16 != 0 {
+        CAMERA_X = CAMERA_X + sin_val as u16;
+        CAMERA_Y = CAMERA_Y + cos_val as u16;
+    }
+    if pad & Joy::Left as u16 != 0 {
+        CAMERA_X = CAMERA_X - cos_val as u16;
+        CAMERA_Y = CAMERA_Y + sin_val as u16;
+    }
+    if pad & Joy::Right as u16 != 0 {
+        CAMERA_X = CAMERA_X + cos_val as u16;
+        CAMERA_Y = CAMERA_Y - sin_val as u16;
+    }
+
+    // B button resets
+    if pad & Joy::B as u16 != 0 {
+        CAMERA_X = 0;
+        CAMERA_Y = 0;
+        ANGLE = 0;
+    }
+}
+
+#[interrupt(nmi)]
+fn nmi_handler() {
+    A = RDNMI;
+}
+
+#[entry]
+fn main() -> ! {
+    snes_init();
+    INIDISP = FORCE_BLANK;
+    NMITIMEN = 0;
+
+    CAMERA_X = 0;
+    CAMERA_Y = 0;
+    ANGLE = 0;
+
+    uploadMode7Vram();
+    uploadPalette();
+
+    // Configure Mode 7
+    set_bgmode!(BG::Mode7, 0);
+    set_main_layers!(Screen::BG1);
+    M7SEL = 0;  // Wrap tilemap
+
+    setupHdma();
+    buildMatrixTables();
+
+    // Write scroll: extract integer from 8.8 via xba (high byte = integer)
+    // xba puts integer in A low byte; sign-extend for M7HOFS/M7VOFS high byte
+    A = CAMERA_X as u16;
+    xba();
+    let scroll_x: u8 = A;
+    BG1HOFS = A;
+    if A & 0x80 != 0 { A = 0xFF; } else { A = 0; }
+    BG1HOFS = A;
+
+    A = CAMERA_Y as u16;
+    xba();
+    let scroll_y: u8 = A;
+    BG1VOFS = A;
+    if A & 0x80 != 0 { A = 0xFF; } else { A = 0; }
+    BG1VOFS = A;
+
+    // M7 center = scroll pixels + screen center
+    // sign-extend scroll bytes to u16 for addition
+    let cx: u16 = (scroll_x as i8 as i16) as u16 + 128;
+    let cy: u16 = (scroll_y as i8 as i16) as u16 + 112;
+    set_m7_center!(cx, cy);
+
+    dma_set_hdma!(0x03);
+    INIDISP = 0x0F;
+    NMITIMEN = Interrupt::Nmi | Interrupt::AutoJoy;
+
+    loop {
+        wait_nmi();
+        readInput();
+
+        // Rebuild rotation matrix HDMA tables
+        buildMatrixTables();
+
+        // Write scroll with sign extension
+        A = CAMERA_X as u16;
+        xba();
+        scroll_x = A;
+        BG1HOFS = A;
+        if A & 0x80 != 0 { A = 0xFF; } else { A = 0; }
+        BG1HOFS = A;
+
+        A = CAMERA_Y as u16;
+        xba();
+        scroll_y = A;
+        BG1VOFS = A;
+        if A & 0x80 != 0 { A = 0xFF; } else { A = 0; }
+        BG1VOFS = A;
+
+        cx = (scroll_x as i8 as i16) as u16 + 128;
+        cy = (scroll_y as i8 as i16) as u16 + 112;
+        set_m7_center!(cx, cy);
+
+        // Re-arm HDMA
+        dma_set_src!(0, HDMA_AB);
+        dma_set_src!(1, HDMA_CD);
+        dma_set_hdma!(0x03);
+    }
+}
+
+// Mode 7 assets
+#[bank(1)]
+static M7_CHR_DATA: [u8; 16384] = include_bytes!("mode7_tileset.chr");
+static M7_PAL_DATA: [u8; 512] = include_bytes!("mode7_tileset.pal");
+
+#[bank(2)]
+static M7_MAP_DATA: [u8; 32768] = include_bytes!("mode7_tileset.map");

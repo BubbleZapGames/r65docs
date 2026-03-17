@@ -172,7 +172,7 @@ fn setupCheckerboard() {
     dma_copy_cgram_const!(0, PALETTE_DATA, 0, 4);
 
     // Build 32x32 checkerboard tilemap directly in VRAM
-    VMAIN = VMAIN_INCREMENT_HIGH | VMAIN_INCREMENT_1;
+    VMAIN = VmainTrigger::High;
     set_vram_addr!(VRAM_BG1_MAP);
 
     let row: u16 = 0;
@@ -188,10 +188,10 @@ fn setupCheckerboard() {
     }
 
     // Configure BG1: Mode 1, 8x8 tiles
-    set_bgmode!(BGMODE_1, 0);
+    set_bgmode!(BG::Mode1, 0);
     set_bg1_map!(0x1C, 0);    // Tilemap at $7000, 32x32
     set_bg12_chr!(0, 0);      // BG1 chr at $0000
-    enable_main!(SCREEN_BG1);
+    set_main_layers!(Screen::BG1);
 }
 
 // Configure HDMA channel 0 for per-scanline window updates,
@@ -235,10 +235,9 @@ fn main() -> ! {
 
     //enable_hdma!(0x01);
     INIDISP = 0x0F;
-    NMITIMEN = AUTOJOY_ENABLE;
+    NMITIMEN = Interrupt::AutoJoy;
 
     loop {
-        wait_nmi();
 
         // Animate radius: close then open
         if dir == 0 {
@@ -259,7 +258,11 @@ fn main() -> ! {
         makeArc(arc_height, &ARC);
         buildHdmaTable(radius, CENTER_X, CENTER_Y);
 
+        wait_nmi();
+
         dma_set_src!(0, HDMA_TABLE);
-        enable_hdma!(0x01);
+        dma_set_hdma!(0x01);
+
+		NOP(1000);
     }
 }
