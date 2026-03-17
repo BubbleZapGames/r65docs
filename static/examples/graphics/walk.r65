@@ -27,8 +27,8 @@ const SPR_WALK_S2: u16 = 136;      // Sprite 8: walk south frame 2
 const SPR_WALK_S3: u16 = 140;      // Sprite 9: walk south frame 3
 
 
-// Sprite attribute: palette 0, priority 2 (in front of BG)
-const SPR_ATTR: u16 = OamPriority::High as u16;
+// Sprite attribute: palette 0, priority 3 (in front of BG)
+const SPR_ATTR: u16 = (OamPriority::InFront as u16) << 8;
 
 // Animation timing
 const ANIM_SPEED: u8 = 8;          // Frames per animation step
@@ -73,10 +73,10 @@ static ANIM_WALK_EAST: [u16; 4] = [
 
 // Walk west: 4 frames (east sprites, horizontally flipped)
 static ANIM_WALK_WEST: [u16; 4] = [
-    SPR_WALK_E0 | SPR_ATTR | OamFlip::VH as u16,
-    SPR_WALK_E1 | SPR_ATTR | OamFlip::VH as u16,
-    SPR_WALK_E2 | SPR_ATTR | OamFlip::VH as u16,
-    SPR_WALK_E3 | SPR_ATTR | OamFlip::VH as u16 
+    SPR_WALK_E0 | SPR_ATTR | (OamFlip::H as u16) << 8,
+    SPR_WALK_E1 | SPR_ATTR | (OamFlip::H as u16) << 8,
+    SPR_WALK_E2 | SPR_ATTR | (OamFlip::H as u16) << 8,
+    SPR_WALK_E3 | SPR_ATTR | (OamFlip::H as u16) << 8
 ];
 
 // Bit masks for OAM extended table manipulation
@@ -223,7 +223,7 @@ fn updateAnimation() {
         if last_dir == Direction::North {
             cur_tile = SPR_REST_NORTH | SPR_ATTR;
         } else if last_dir == Direction::West {
-            cur_tile = SPR_REST_SOUTH | SPR_ATTR | OamFlip::VH as u16;
+            cur_tile = SPR_REST_SOUTH | SPR_ATTR | (OamFlip::H as u16) << 8;
         } else {
             cur_tile = SPR_REST_SOUTH | SPR_ATTR;
         }
