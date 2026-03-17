@@ -6,8 +6,19 @@
         {
           "id": "hello_world",
           "name": "Hello World",
-          "description": "",
+          "description": "Displays centered text using the Console library and default font",
           "file": "basics/hello_world.r65"
+        }
+      ]
+    },
+    {
+      "name": "Data Structures",
+      "examples": [
+        {
+          "id": "enum_struct",
+          "name": "Enums & Structs",
+          "description": "Packed structs and C-style enums with no padding or overhead",
+          "file": "data-structures/enum_struct.r65"
         }
       ]
     },
@@ -34,14 +45,43 @@
         {
           "id": "mosaicFade",
           "name": "Mosaic Fade",
-          "description": "Cycling mosaic pixelation on rainbow color bars",
+          "description": "Cycling mosaic pixelation effect on a background image",
           "file": "graphics/mosaicFade.r65"
+        },
+        {
+          "id": "mode7",
+          "name": "Mode 7",
+          "description": "Top-down rotation with D-pad movement and L/R rotation via HDMA",
+          "file": "graphics/mode7.r65"
+        },
+        {
+          "id": "sprite_priority",
+          "name": "Sprite Priority",
+          "description": "Wasps orbiting a beehive, changing priority each half-oval",
+          "file": "graphics/sprite_priority.r65"
         },
         {
           "id": "walkCycle",
           "name": "Walk Cycle",
           "description": "Sprite walk cycle with D-pad controlled directional animation",
           "file": "graphics/walk.r65"
+        },
+        {
+          "id": "windowSkew",
+          "name": "Window Skew",
+          "description": "Per-scanline horizontal wave effect via HDMA and compile-time sine table",
+          "file": "graphics/window_skew.r65"
+        }
+      ]
+    },
+    {
+      "name": "Hardware",
+      "examples": [
+        {
+          "id": "interrupt_handler",
+          "name": "Interrupt Handler",
+          "description": "Automatic register save/restore with #[interrupt(nmi)]",
+          "file": "hardware/interrupt_handler.r65"
         }
       ]
     }

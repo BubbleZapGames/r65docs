@@ -56,4 +56,5 @@ list:
 	@echo "Targets:"
 	@$(foreach smc,$(SMC_TARGETS),echo "  $(smc)";)
 
-.PHONY: all clean list
+.PRECIOUS: %.smc
+.PHONY: all list
