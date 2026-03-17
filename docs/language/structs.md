@@ -102,7 +102,7 @@ impl far Console {
 
     macro_rules! println($fmt:literal, $($args:expr),*) {
         format!(__console_fmt_buf, $fmt, $($args),*);
-        self.print_line(&__console_fmt_buf as far *u8);
+        self.println(&__console_fmt_buf as far *u8);
     }
 }
 ```
