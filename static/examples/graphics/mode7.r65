@@ -294,8 +294,8 @@ fn main() -> ! {
 
 // Mode 7 assets
 #[bank(1)]
-static M7_CHR_DATA: [u8; 16384] = include_bytes!("mode7_tileset.chr");
-static M7_PAL_DATA: [u8; 512] = include_bytes!("mode7_tileset.pal");
+static M7_CHR_DATA = include_bytes!("mode7_tileset.chr");
+static M7_PAL_DATA = include_bytes!("mode7_tileset.pal");
 
 #[bank(2)]
-static M7_MAP_DATA: [u8; 32768] = include_bytes!("mode7_tileset.map");
+static M7_MAP_DATA = include_bytes!("mode7_tileset.map");

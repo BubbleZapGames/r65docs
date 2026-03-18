@@ -12,7 +12,7 @@ const PAUSE_FRAMES: u16 = 120;  // ~2 seconds at 60fps
 const STEP_FRAMES: u16 = 8;     // 120 / 15 = 8 frames per mosaic level
 
 fn uploadTiles() {
-    dma_copy_vram_const!(0, TILE_DATA, VRAM_BG1_TILES, 11392);
+    dma_copy_vram_const!(0, TILE_DATA, VRAM_BG1_TILES, TILE_DATA.len());
 }
 
 fn uploadTilemap() {
@@ -21,7 +21,7 @@ fn uploadTilemap() {
     set_vram_addr!(VRAM_BG1_MAP);
 
     // DMA the 32x24 = 768 entries (1536 bytes)
-    dma_copy_vram_const!(0, TILEMAP_DATA, VRAM_BG1_MAP, 1536);
+    dma_copy_vram_const!(0, TILEMAP_DATA, VRAM_BG1_MAP, TILEMAP_DATA.len());
 
     // Fill remaining 8 rows (256 entries) with tile 0
     set_vram_addr!(0x7300);  // $7000 + 768
@@ -105,6 +105,6 @@ fn main() -> ! {
     }
 }
 
-static PALETTE_DATA: [u8; 128] = include_bytes!("controls_screen.pal");
-static TILE_DATA: [u8; 11392] = include_bytes!("controls_screen.chr");
-static TILEMAP_DATA: [u8; 1536] = include_bytes!("controls_screen.tilemap");
+static PALETTE_DATA = include_bytes!("controls_screen.pal");
+static TILE_DATA = include_bytes!("controls_screen.chr");
+static TILEMAP_DATA = include_bytes!("controls_screen.tilemap");

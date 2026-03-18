@@ -297,7 +297,7 @@ fn main() -> ! {
 // Sprite data
 #[bank(1)]
 static PALETTE_DATA = include_bytes!("../assets/penguin.pal");
-static SPRITE_DATA: [u8; 1024] = include_bytes!("../assets/penguin.chr");
+static SPRITE_DATA = include_bytes!("../assets/penguin.chr");
 
 // Background data
 static BG_CHR_DATA = include_bytes!("../assets/platform.chr");

@@ -113,7 +113,7 @@ fn nmi_handler() {
 // ============================================================================
 
 fn uploadSpriteTiles() {
-    dma_copy_vram_const!(0, WASPY_CHR, VRAM_OBJ_TILES, 4096);
+    dma_copy_vram_const!(0, WASPY_CHR, VRAM_OBJ_TILES, WASPY_CHR.len());
 }
 
 fn uploadSpritePalette() {
@@ -123,7 +123,7 @@ fn uploadSpritePalette() {
 
 fn uploadBackground() {
     // BG1 chr at VRAM $0000
-    dma_copy_vram_const!(0, HIVE_CHR, VRAM_BG1_TILES, 2080);
+    dma_copy_vram_const!(0, HIVE_CHR, VRAM_BG1_TILES, HIVE_CHR.len());
 
     // BG palette at CGRAM 0
     dma_copy_cgram_const!(0, HIVE_PAL, 0, 16);
@@ -286,9 +286,9 @@ fn main() -> ! {
 // ROM DATA (bank 1)
 // ============================================================================
 
-static WASPY_CHR: [u8; 4096] = include_bytes!("waspy_boi.chr");
-static WASPY_PAL: [u8; 16] = include_bytes!("waspy_boi.pal");
+static WASPY_CHR = include_bytes!("waspy_boi.chr");
+static WASPY_PAL = include_bytes!("waspy_boi.pal");
 
-static HIVE_CHR: [u8; 2080] = include_bytes!("beehive.chr");
-static HIVE_PAL: [u8; 32] = include_bytes!("beehive.pal");
-static HIVE_TILEMAP: [u8; 192] = include_bytes!("beehive.tilemap");
+static HIVE_CHR = include_bytes!("beehive.chr");
+static HIVE_PAL = include_bytes!("beehive.pal");
+static HIVE_TILEMAP = include_bytes!("beehive.tilemap");
