@@ -1,0 +1,305 @@
+// platformer - Penguin Platformer Demo
+// 32x32 penguin sprite with 2-frame walk animation, gravity, and BG1 scrolling
+// D-pad left/right scrolls BG1, character falls when no solid tile below
+
+#[snesrom(name="PLATFORMER")]
+#[bank(0)]
+
+include!("sneslib.r65")
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+// Sprite tile numbers (2 frames of 32x32 in 128px-wide VRAM layout)
+const SPR_IDLE: u8 = 0;       // Standing frame
+const SPR_WALK_0: u8 = 0;     // Walk frame 0
+const SPR_WALK_1: u8 = 4;     // Walk frame 1 (next 32x32 block)
+
+// Sprite attributes
+const SPR_ATTR: u8 = OamPriority::InFront as u8;
+const SPR_ATTR_HFLIP: u8 = OamPriority::InFront as u8 | OamFlip::H as u8;
+
+// Character screen position (centered horizontally)
+const CHAR_SCREEN_X: u8 = 112;   // (256 - 32) / 2
+
+// Physics
+const WALK_SPEED: u8 = 2;
+const GRAVITY: u8 = 1;
+const MAX_FALL_SPEED: u8 = 2;
+
+// Animation timing
+const ANIM_SPEED: u8 = 10;       // Frames per animation step
+
+// Direction states
+enum Direction { None = 0, Left, Right }
+
+// Walk animation (2-frame cycle)
+static ANIM_WALK: [u8; 2] = [SPR_WALK_0, SPR_WALK_1];
+
+// ============================================================================
+// RAM VARIABLES
+// ============================================================================
+
+#[lowram]
+static mut player: OamEntry;
+
+#[lowram]
+static mut scroll_x: u16 = 0;
+
+#[lowram]
+static mut char_y: u8 = 0;
+
+#[lowram]
+static mut velocity_y: u8 = 0;
+
+#[lowram]
+static mut on_ground: u8 = 0;
+
+#[lowram]
+static mut direction: u8 = Direction::None;
+
+#[lowram]
+static mut anim_frame: u8;
+
+#[lowram]
+static mut anim_timer: u8;
+
+#[lowram]
+static mut controller1: u16;
+
+#[lowram]
+static mut frame_cnt: u16;
+
+// ============================================================================
+// SETUP FUNCTIONS
+// ============================================================================
+
+fn uploadSprites() {
+    // Upload penguin tiles with 16-tile VRAM row spacing for 32x32 sprites.
+    // CHR data is 8 tiles wide × 4 rows (256 bytes/row). Each row must map
+    // to a separate VRAM row (256 words apart) so 32x32 tile lookups work.
+    // DMA source auto-advances after each transfer, so we just reset dest/size.
+    VMAIN = VmainTrigger::High;
+    dma_set_src!(0, SPRITE_DATA);
+    dma_set_ppu_dest!(0, 1, 24);
+
+    // Row 0 → VRAM $6000
+    set_vram_addr!(VRAM_OBJ_TILES);
+    dma_set_size!(0, 256);
+    dma_trigger!(0);
+
+    // Row 1 → VRAM $6100
+    set_vram_addr!(VRAM_OBJ_TILES + 256);
+    dma_set_size!(0, 256);
+    dma_trigger!(0);
+
+    // Row 2 → VRAM $6200
+    set_vram_addr!(VRAM_OBJ_TILES + 512);
+    dma_set_size!(0, 256);
+    dma_trigger!(0);
+
+    // Row 3 → VRAM $6300
+    set_vram_addr!(VRAM_OBJ_TILES + 768);
+    dma_set_size!(0, 256);
+    dma_trigger!(0);
+
+    // Upload sprite palette
+    dma_copy_cgram_const!(1, PALETTE_DATA, 128, PALETTE_DATA.len());
+}
+
+fn uploadBackground() {
+    dma_copy_vram_const!(0, BG_CHR_DATA, VRAM_BG1_TILES, BG_CHR_DATA.len());
+    dma_copy_cgram_const!(1, BG_PAL_DATA, 0, BG_PAL_DATA.len());
+    dma_copy_vram_const!(2, BG_TILEMAP, VRAM_BG1_MAP, BG_TILEMAP.len());
+}
+
+// ============================================================================
+// COLLISION
+// ============================================================================
+
+// Check if a world pixel position has a solid tile (non-zero tile = solid)
+fn is_solid(world_x: u8, world_y: u8) -> u8 {
+    let tx: u8 = world_x >> 3;
+    let ty: u8 = world_y >> 3;
+
+    // Bounds check: tilemap is 32x28, anything outside is empty
+    if ty >= 28 {
+        return 0;
+    }
+
+    let idx: u16 = ((ty as u16) * 32 + (tx as u16)) * 2;
+    let tile: u16 = (BG_TILEMAP[idx + 1] as u16) << 8 | (BG_TILEMAP[idx] as u16);
+
+    match tile {
+       0x0B | 0x230 | 0x90 | 0x0A | 0x0C | 0x240 | 0x25 | 0x225 | 0x226 => return 1,
+       _ => return 0,
+
+    }
+}
+
+// ============================================================================
+// PHYSICS
+// ============================================================================
+
+fn updatePhysics() {
+    // World X at character's left and right foot edges
+    let center_x: u8 = (scroll_x as u8) + CHAR_SCREEN_X + 16;
+    let left_x: u8 = (scroll_x as u8) + CHAR_SCREEN_X + 4;
+    let right_x: u8 = (scroll_x as u8) + CHAR_SCREEN_X + 28;
+
+    if on_ground == 0 {
+        // Apply gravity
+        if velocity_y < MAX_FALL_SPEED {
+            velocity_y = velocity_y + GRAVITY;
+        }
+        let new_y: u8 = char_y + velocity_y;
+
+        // Check if feet hit ground at new position
+        let feet_y: u8 = new_y + 32;
+        if is_solid(left_x, feet_y) == 1 || is_solid(right_x, feet_y) == 1 {
+            // Snap to top of tile row
+            let tile_row: u8 = feet_y >> 3;
+            char_y = (tile_row << 3) - 32;
+            velocity_y = 0;
+            on_ground = 1;
+        } else {
+            char_y = new_y;
+        }
+
+    } else {
+        // Check if still standing on ground (one pixel below feet)
+        let feet_y: u8 = char_y + 33;
+        if is_solid(left_x, feet_y) == 0 && is_solid(right_x, feet_y) == 0 {
+            on_ground = 0;
+        }
+    }
+}
+
+// ============================================================================
+// ANIMATION
+// ============================================================================
+
+fn updateAnimation() {
+    if direction == Direction::None {
+        anim_timer = 0;
+        anim_frame = 0;
+        player.set_all!(CHAR_SCREEN_X, char_y, SPR_IDLE, SPR_ATTR);
+    } else {
+        anim_timer++;
+        if anim_timer >= ANIM_SPEED {
+            anim_timer = 0;
+            anim_frame++;
+            if anim_frame >= 2 {
+                anim_frame = 0;
+            }
+        }
+
+        if direction == Direction::Right {
+            player.set_all!(CHAR_SCREEN_X, char_y, ANIM_WALK[anim_frame], SPR_ATTR);
+        } else {
+            player.set_all!(CHAR_SCREEN_X, char_y, ANIM_WALK[anim_frame], SPR_ATTR_HFLIP);
+        }
+    }
+}
+
+// ============================================================================
+// INPUT HANDLING
+// ============================================================================
+
+fn handleInput() {
+    direction = Direction::None;
+    if controller1 & Joy::Left as u16 != 0 {
+        direction = Direction::Left;
+        scroll_x = scroll_x - WALK_SPEED;
+    } else if controller1 & Joy::Right as u16 != 0 {
+        direction = Direction::Right;
+        scroll_x = scroll_x + WALK_SPEED;
+    }
+}
+
+// ============================================================================
+// NMI HANDLER
+// ============================================================================
+
+#[interrupt(nmi)]
+fn nmi_handler() {
+
+    player.write_oam!(0);
+
+    // Update BG1 scroll during vblank
+    set_bg1_hscroll!(scroll_x);
+
+    // Read joypad data during vblank
+    wait_autojoy();
+    controller1 = (JOY1H as u16) << 8 | (JOY1L as u16);
+
+    frame_cnt++;
+    A = RDNMI;
+}
+
+// ============================================================================
+// ENTRY POINT
+// ============================================================================
+
+#[entry]
+fn main() -> ! {
+    snes_init();
+    INIDISP = FORCE_BLANK;
+    NMITIMEN = 0;
+
+    // Upload graphics
+    uploadSprites();
+    uploadBackground();
+
+    // Configure Mode 1
+    set_bgmode!(BG::Mode1, 0);
+    set_bg1_map!(0x1C, 0);    // BG1 tilemap at VRAM $7000, 32x32
+    set_bg12_chr!(0, 0);      // BG1 chr at VRAM $0000
+
+    // Configure sprites: 8x8 / 32x32, tiles at VRAM $6000 (base=3)
+    set_obj_sel!(ObjSize::T8x8_32x32, 3, 0);
+
+    // Enable BG1 and sprites on main screen
+    set_main_layers!(Screen::BG1 | Screen::Obj);
+
+    // Initialize state
+    scroll_x = 0;
+    char_y = 0;
+    velocity_y = 0;
+    on_ground = 0;
+    direction = Direction::None;
+    anim_frame = 0;
+    anim_timer = 0;
+    frame_cnt = 0;
+
+    // Set sprite 0 as large (32x32) in extended OAM table
+    OAMADDL = 0;
+    OAMADDH = 1;    // Select extended table (word address 0x100)
+    OAMDATA = 0x02; // Bit 1 = large size for sprite 0
+
+    // Enable display
+    INIDISP = 0x0F;
+    NMITIMEN = Interrupt::Nmi | Interrupt::AutoJoy;
+
+    loop {
+        wait_nmi();
+        handleInput();
+        updatePhysics();
+        updateAnimation();
+    }
+}
+
+// ============================================================================
+// ROM DATA
+// ============================================================================
+
+// Sprite data
+#[bank(1)]
+static PALETTE_DATA = include_bytes!("../assets/penguin.pal");
+static SPRITE_DATA: [u8; 1024] = include_bytes!("../assets/penguin.chr");
+
+// Background data
+static BG_CHR_DATA = include_bytes!("../assets/platform.chr");
+static BG_PAL_DATA = include_bytes!("../assets/platform.pal");
+static BG_TILEMAP = include_bytes!("platform.tilemap");

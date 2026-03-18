@@ -37,6 +37,12 @@
       "name": "Graphics",
       "examples": [
         {
+          "id": "platformer",
+          "name": "Basic Platform",
+          "description": "Basic platformer logic using tilemap for ground detection",
+          "file": "graphics/platformer.r65"
+        },
+        {
           "id": "irisHDMA",
           "name": "Iris Animation",
           "description": "Iris animation using HDMA and window clipping",
