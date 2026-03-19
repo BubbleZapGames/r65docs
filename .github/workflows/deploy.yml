@@ -39,7 +39,7 @@ jobs:
       - name: Build R65 wheel
         run: |
           cd r65-compiler
-          pip install wheel
+          pip install setuptools wheel
           python setup.py bdist_wheel
           mkdir -p ../static/pyodide
           cp dist/r65-*.whl ../static/pyodide/
