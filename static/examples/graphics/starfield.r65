@@ -1,0 +1,275 @@
+// starfield - Center-Emitting Star Field
+// Stars fly outward from screen center in all directions with exponential
+// acceleration. Quadrants are interleaved across sprite indices to avoid
+// the SNES per-scanline sprite limit dropping an entire quadrant.
+// Stars grow from dim dots to bright crosses as they move outward.
+
+#[snesrom(name="STAR FIELD")]
+#[bank(0)]
+
+include!("sneslib.r65")
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+const NUM_STARS: u8 = 20;
+const ANGLES_PER_QUAD: u8 = NUM_STARS / 4;
+const CENTER_X: u8 = 128;
+const CENTER_Y: u8 = 112;
+
+// Distance thresholds for tile transitions (in pixels from center)
+const DIST_MED: u8 = 20;
+const DIST_BRIGHT: u8 = 120;
+
+// ============================================================================
+// VELOCITY AND DIRECTION TABLES
+// ============================================================================
+//
+// Quadrants are INTERLEAVED across sprite indices to distribute OAM priority:
+//   i % 4 == 0: +X, +Y  (bottom-right)
+//   i % 4 == 1: -X, +Y  (bottom-left)
+//   i % 4 == 2: -X, -Y  (top-left)
+//   i % 4 == 3: +X, -Y  (top-right)
+//
+// Velocity index = i / 4  (ANGLES_PER_QUAD angles per quadrant)
+
+static VEL_X: [u16; ANGLES_PER_QUAD] = [48, 44, 34, 24, 6];
+static VEL_Y: [u16; ANGLES_PER_QUAD] = [2,  20, 34, 42, 48];
+
+// Direction tables: interleaved by i % 4
+const fn build_x_neg() -> [u8; NUM_STARS] {
+    let mut t: [u8; NUM_STARS] = [0; NUM_STARS];
+    for i in 0..NUM_STARS {
+        let quad: u16 = i & 3;
+        if quad == 1 { t[i] = 1; }
+        if quad == 2 { t[i] = 1; }
+    }
+    return t;
+}
+
+const fn build_y_neg() -> [u8; NUM_STARS] {
+    let mut t: [u8; NUM_STARS] = [0; NUM_STARS];
+    for i in 0..NUM_STARS {
+        let quad: u16 = i & 3;
+        if quad == 2 { t[i] = 1; }
+        if quad == 3 { t[i] = 1; }
+    }
+    return t;
+}
+
+static X_NEG: [u8; NUM_STARS] = build_x_neg();
+static Y_NEG: [u8; NUM_STARS] = build_y_neg();
+
+// Stagger initial offsets so the screen starts populated
+const fn build_init_offset() -> [u16; NUM_STARS] {
+    let mut t: [u16; NUM_STARS] = [0; NUM_STARS];
+    let mut seed: u16 = 0xBEEF;
+    for i in 0..NUM_STARS {
+        seed = (seed * 13 + 7) & 0xFFFF;
+        t[i] = (seed >> 2) & 0x3FFF;
+    }
+    return t;
+}
+
+static INIT_OFF: [u16; NUM_STARS] = build_init_offset();
+
+// ============================================================================
+// RAM VARIABLES
+// ============================================================================
+
+#[lowram]
+static mut sprites: [OamEntry; NUM_STARS];
+
+#[lowram]
+static mut star_ox: [u16; NUM_STARS];
+
+#[lowram]
+static mut star_oy: [u16; NUM_STARS];
+
+#[lowram]
+static mut star_y_off: [u8; NUM_STARS];
+
+#[lowram]
+static mut spawn_idx: u8;
+
+#[lowram]
+static mut frame_cnt: u16;
+
+// ============================================================================
+// SETUP
+// ============================================================================
+
+fn uploadStarTiles() {
+    dma_copy_vram_const!(0, STAR_TILES, VRAM_OBJ_TILES, STAR_TILES.len());
+}
+
+fn uploadStarPalette() {
+    dma_copy_cgram_const!(0, STAR_PAL, 128, STAR_PAL.len());
+}
+
+// ============================================================================
+// STAR UPDATE
+// ============================================================================
+
+fn updateStars() {
+    let i: u16 = 0;
+    while i < NUM_STARS as u16 {
+        // Velocity index: i / 4
+        let vi: u16 = i >> 2;
+
+        // Accelerate: exponential growth + base velocity
+        let ox: u16 = star_ox[i];
+        let oy: u16 = star_oy[i];
+        ox = ox + (ox >> 4) + VEL_X[vi];
+        oy = oy + (oy >> 4) + VEL_Y[vi];
+
+        // Integer distance from center
+        let dist_x: u8 = (ox >> 8) as u8;
+        let dist_y: u8 = (oy >> 8) as u8;
+
+        // Respawn at center if off-screen
+        let respawn: u8 = 0;
+        if dist_x >= 128 { respawn = 1; }
+        if dist_y >= 112 { respawn = 1; }
+        if respawn != 0 {
+            ox = 0;
+            oy = 0;
+            dist_x = 0;
+            dist_y = 0;
+            // Assign rotating vertical spawn offset (0-7 → -4 to +3)
+            star_y_off[i] = spawn_idx;
+            spawn_idx = (spawn_idx + 1) & 0x07;
+        }
+
+        star_ox[i] = ox;
+        star_oy[i] = oy;
+
+        // Screen position from direction lookup tables
+        let sx: u8 = CENTER_X + dist_x;
+        if X_NEG[i] != 0 {
+            sx = CENTER_X - dist_x;
+        }
+
+        // Apply per-star vertical spawn offset (0-7 maps to -4..+3)
+        let cy: u8 = CENTER_Y - 4 + star_y_off[i];
+        let sy: u8 = cy + dist_y;
+        if Y_NEG[i] != 0 {
+            sy = cy - dist_y;
+        }
+
+        // Tile based on combined distance from center (Manhattan)
+        let combined: u16 = dist_x as u16 + dist_y as u16;
+        let tile: u8 = 0;
+        if combined >= DIST_MED as u16 { tile = 1; }
+        if combined >= DIST_BRIGHT as u16 { tile = 2; }
+
+        let attr: u8 = OamPalette::Palette0 as u8 | OamPriority::InFront as u8;
+        sprites[i].set_all!(sx, sy, tile, attr);
+        i++;
+    }
+}
+
+// ============================================================================
+// INIT
+// ============================================================================
+
+fn initStars() {
+    spawn_idx = 0;
+    let i: u16 = 0;
+    while i < NUM_STARS as u16 {
+        star_ox[i] = INIT_OFF[i];
+        star_oy[i] = INIT_OFF[i];
+        star_y_off[i] = spawn_idx;
+        spawn_idx = (spawn_idx + 1) & 0x07;
+        sprites[i].set!(0, 240, 0);
+        i++;
+    }
+}
+
+// ============================================================================
+// NMI HANDLER
+// ============================================================================
+
+#[interrupt(nmi)]
+fn nmi_handler() {
+    dma_copy_oam_const!(0, sprites, NUM_STARS * 4);
+
+    frame_cnt++;
+    A = RDNMI;
+}
+
+
+// ============================================================================
+// ENTRY POINT
+// ============================================================================
+
+#[entry]
+fn main() -> ! {
+    snes_init();
+    INIDISP = FORCE_BLANK;
+    NMITIMEN = 0;
+
+    uploadStarTiles();
+    uploadStarPalette();
+
+    set_bgmode!(BG::Mode0, 0);
+    set_obj_sel!(ObjSize::T8x8_16x16, 3, 0);
+    set_main_layers!(Screen::Obj);
+
+    initStars();
+    frame_cnt = 0;
+
+    INIDISP = 0x0F;
+    NMITIMEN = Interrupt::Nmi;
+
+    loop {
+        wait_nmi();
+        updateStars();
+    }
+}
+
+// ============================================================================
+// TILE DATA  (3 tiles × 32 bytes = 96 bytes, 4bpp 8×8)
+// ============================================================================
+//
+// SNES 4bpp layout per tile:
+//   Bytes  0-15: BP0/BP1 interleaved by row
+//   Bytes 16-31: BP2/BP3 interleaved by row
+// Pixel color index = BP3:BP2:BP1:BP0
+
+static STAR_TILES: [u8; 96] = [
+    // Tile 0: single pixel at (3,3), color 1 (dim) — BP0 only
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,   // BP0/BP1 rows 0-3
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,   // BP0/BP1 rows 4-7
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,   // BP2/BP3 rows 0-3
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,   // BP2/BP3 rows 4-7
+    // Tile 1: single pixel at (3,3), color 15 (bright white) — all BPs
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x10,   // BP0/BP1 rows 0-3
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,   // BP0/BP1 rows 4-7
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x10,   // BP2/BP3 rows 0-3
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,   // BP2/BP3 rows 4-7
+    // Tile 2: plus shape at center, color 15 (bright) — all BPs
+    0x00, 0x00, 0x00, 0x00, 0x10, 0x10, 0x38, 0x38,   // BP0/BP1 rows 0-3
+    0x10, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,   // BP0/BP1 rows 4-7
+    0x00, 0x00, 0x00, 0x00, 0x10, 0x10, 0x38, 0x38,   // BP2/BP3 rows 0-3
+    0x10, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00    // BP2/BP3 rows 4-7
+];
+
+// ============================================================================
+// PALETTE  (16 colors × 2 bytes = 32 bytes, BGR555)
+// ============================================================================
+
+static STAR_PAL: [u8; 32] = [
+    0x00, 0x00,   // Color  0: transparent
+    0x4A, 0x39,   // Color  1: dim blue-gray (b=14,g=10,r=10)
+    0x00, 0x00,   // Color  2: unused
+    0xB4, 0x6A,   // Color  3: mid white-blue (b=26,g=22,r=20)
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,   // Colors 4-7
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,   // Colors 8-11
+    0x00, 0x00, 0x00, 0x00,                             // Colors 12-13
+    0x00, 0x00,   // Color 14: unused
+    0xFF, 0x7F    // Color 15: bright white
+];
+
+

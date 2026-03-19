@@ -77,6 +77,12 @@
           "name": "Window Skew",
           "description": "Per-scanline horizontal wave effect via HDMA and compile-time sine table",
           "file": "graphics/window_skew.r65"
+        },
+        {
+          "id": "starfield",
+          "name": "Star Field",
+          "description": "Center-emitting star field with exponential acceleration and distance-based growth",
+          "file": "graphics/starfield.r65"
         }
       ]
     },
