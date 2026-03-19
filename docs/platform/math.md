@@ -1,5 +1,5 @@
 ---
-sidebar_position: 3
+sidebar_position: 5
 title: Math Library
 description: Standard library math functions and 32-bit integer types for the 65816.
 ---

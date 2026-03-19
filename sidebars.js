@@ -4,7 +4,11 @@ const sidebars = {
     {
       type: 'category',
       label: 'Getting Started',
-      items: ['getting-started/language-overview'],
+      items: [
+        'getting-started/language-overview',
+        'getting-started/installation',
+        'getting-started/faq',
+      ],
     },
     {
       type: 'category',
@@ -41,6 +45,9 @@ const sidebars = {
         'platform/snes-rom-header',
         'platform/math',
         'platform/abi-models',
+        'platform/compiler',
+        'platform/builtin_library',
+        'platform/tools',
       ],
     },
   ],

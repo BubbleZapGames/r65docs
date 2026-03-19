@@ -1,5 +1,5 @@
 ---
-sidebar_position: 1
+sidebar_position: 2
 title: SNES ROM Header
 description: Configuring the SNES ROM header with the #[snesrom] attribute.
 ---
