@@ -209,7 +209,7 @@ fn readInput() {
 
 #[interrupt(nmi)]
 fn nmi_handler() {
-    A = RDNMI;
+    clear_nmi!();
 }
 
 #[entry]

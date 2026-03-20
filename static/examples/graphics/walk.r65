@@ -210,7 +210,7 @@ fn nmi_handler() {
     controller1 = (JOY1H as u16) << 8 | (JOY1L as u16);
 
     frame_cnt++;
-    A = RDNMI;
+    clear_nmi!();
 }
 
 

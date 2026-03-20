@@ -196,7 +196,7 @@ fn nmi_handler() {
     dma_copy_oam_const!(0, sprites, NUM_STARS * 4);
 
     frame_cnt++;
-    A = RDNMI;
+    clear_nmi!();
 }
 
 

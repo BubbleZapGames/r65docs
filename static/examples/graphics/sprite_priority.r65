@@ -80,35 +80,6 @@ static mut anim_frame: u8;
 static mut frame_cnt: u16;
 
 // ============================================================================
-// NMI HANDLER
-// ============================================================================
-
-#[interrupt(nmi)]
-fn nmi_handler() {
-
-    // Write 2 sprite entries to OAM low table
-    OAMADD = 0;
-    sprites[0].write_oam!(0);
-    sprites[1].write_oam!(1);
-
-    // Write OAM high table: sprites 0-1 = large (64x64)
-    // Each sprite: 2 bits (bit0 = X high, bit1 = size)
-    // Sprite 0: bits 1:0 = 0b10, Sprite 1: bits 3:2 = 0b10 → 0x0A
-    OAMADD = 0x0100;
-    OAMDATA = 0x0A;  // sprites 0-1: large, 2-3: small
-
-    // Remaining 31 bytes: all zero
-    let j: u16 = 0;
-    while j < 31 {
-        OAMDATA = 0;
-        j++;
-    }
-
-    frame_cnt++;
-    A = RDNMI;
-}
-
-// ============================================================================
 // SETUP
 // ============================================================================
 
@@ -236,6 +207,35 @@ fn hideUnusedSprites() {
         OAMDATA = 0;    // attr
         i++;
     }
+}
+
+// ============================================================================
+// NMI HANDLER
+// ============================================================================
+
+#[interrupt(nmi)]
+fn nmi_handler() {
+
+    // Write 2 sprite entries to OAM low table
+    OAMADD = 0;
+    sprites[0].write_oam!(0);
+    sprites[1].write_oam!(1);
+
+    // Write OAM high table: sprites 0-1 = large (64x64)
+    // Each sprite: 2 bits (bit0 = X high, bit1 = size)
+    // Sprite 0: bits 1:0 = 0b10, Sprite 1: bits 3:2 = 0b10 → 0x0A
+    OAMADD = 0x0100;
+    OAMDATA = 0x0A;  // sprites 0-1: large, 2-3: small
+
+    // Remaining 31 bytes: all zero
+    let j: u16 = 0;
+    while j < 31 {
+        OAMDATA = 0;
+        j++;
+    }
+
+    frame_cnt++;
+    clear_nmi!();
 }
 
 // ============================================================================

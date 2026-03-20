@@ -22,20 +22,11 @@ fn uploadTilemap() {
 
     // DMA the 32x24 = 768 entries (1536 bytes)
     dma_copy_vram_const!(0, TILEMAP_DATA, VRAM_BG1_MAP, TILEMAP_DATA.len());
-
-    // Fill remaining 8 rows (256 entries) with tile 0
-    set_vram_addr!(0x7300);  // $7000 + 768
-    let i: u16 = 0;
-    while i < 256 {
-        VMDATAL = 0;
-        VMDATAH = 0;
-        i++;
-    }
 }
 
 #[interrupt(nmi)]
 fn nmi_handler() {
-    A = RDNMI;
+    clear_nmi!();
 }
 
 #[entry]
