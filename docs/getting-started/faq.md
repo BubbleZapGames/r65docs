@@ -44,7 +44,7 @@ cc65 is better for generic 6502 targets and portable C code. R65 is better for 6
 - Explicit type casts via `as`
 - `include!()` and `asm!()` for file inclusion and inline assembly
 
-See the [language overview](language-overview.md) for a walkthrough.
+See the [language overview](overview.md) for a walkthrough.
 
 ### What's intentionally omitted and why?
 

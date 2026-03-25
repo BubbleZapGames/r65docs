@@ -83,7 +83,7 @@ const config = {
             items: [
               {
                 label: 'Language Overview',
-                to: '/docs/getting-started/language-overview',
+                to: '/docs/getting-started/overview',
               },
               {
                 label: 'Type System',

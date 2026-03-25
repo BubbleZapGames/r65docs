@@ -5,8 +5,8 @@ const sidebars = {
       type: 'category',
       label: 'Getting Started',
       items: [
-        'getting-started/language-overview',
-        'getting-started/installation',
+        'getting-started/overview',
+        'getting-started/setup',
         'getting-started/faq',
       ],
     },
