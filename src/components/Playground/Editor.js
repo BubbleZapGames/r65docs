@@ -12,6 +12,10 @@ export function Editor({ value, onChange, onCompile }) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
+  // Track latest value so async setup() always uses current content
+  const valueRef = useRef(value);
+  valueRef.current = value;
+
   useEffect(() => {
     let destroyed = false;
 
@@ -54,7 +58,7 @@ export function Editor({ value, onChange, onCompile }) {
       }
 
       const state = EditorState.create({
-        doc: value,
+        doc: valueRef.current,
         extensions,
       });
 
@@ -80,17 +84,15 @@ export function Editor({ value, onChange, onCompile }) {
   }, [colorMode]);
 
   // Update editor content when value changes externally (e.g. example selection)
-  const valueRef = useRef(value);
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
     const currentDoc = view.state.doc.toString();
-    if (value !== currentDoc && value !== valueRef.current) {
+    if (value !== currentDoc) {
       view.dispatch({
         changes: { from: 0, to: currentDoc.length, insert: value },
       });
     }
-    valueRef.current = value;
   }, [value]);
 
   return <div ref={containerRef} style={{ height: '100%', width: '100%' }} />;
