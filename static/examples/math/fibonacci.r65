@@ -1,26 +1,80 @@
-// Fibonacci sequence using zeropage scratch variables
-//
-// Zeropage (direct page) access is the fastest memory
-// on the 65816 — 1 cycle faster than absolute addressing.
+// ============================================================================
+// Fibonacci Sequence
+// ============================================================================
+// Prints the Fibonacci sequence to the console, one number per second.
+// When the sequence overflows u16 (>65535), starts a new line and resets.
+// ============================================================================
+
+#[snesrom(name="FIBONACCI")]
+#[bank(0)]
+
+include!("console.r65")
+include!("default_font.r65")
+
+#[ram]
+static mut console: Console;
 
 #[zeropage]
-static mut FIB_A: u8;
+static mut fib_a: u16;
 
 #[zeropage]
-static mut FIB_B: u8;
+static mut fib_b: u16;
 
 #[zeropage]
-static mut FIB_N: u8;
+static mut frame_delay: u16;
 
-fn fibonacci(n @ A: u8) -> u8 {
-    FIB_A = 0;
-    FIB_B = 1;
-    FIB_N = n;
-    while FIB_N > 0 {
-        let temp @ A = FIB_B;
-        FIB_B = FIB_A + FIB_B;
-        FIB_A = temp;
-        FIB_N--;
+#[entry]
+fn main() -> ! {
+    snes_init();
+
+    set_bgmode!(BG::Mode0, 0);
+    set_bg1_map!(0x00, 0);
+    set_bg12_chr!(1, 0);
+
+    dma_copy_cgram_const!(0, CONSOLE_PALETTE, 0, 4);
+
+    console.init(0);
+    console.set_vram(0x0000);
+    console.upload_font(0x1000, 32, &CONSOLE_FONT, 95, TileSize::Bpp2);
+    console.set_cursor(0, 1);
+
+    set_main_layers!(Screen::BG1);
+    set_brightness!(15);
+
+    // ~60 frames per second (NTSC)
+    frame_delay = 10;
+
+    loop {
+        // Start a new sequence
+        fib_a = 0;
+        fib_b = 1;
+
+        // Print first two numbers: 0, 1
+        wait_nmi();
+        console.print!("{u16}", fib_a);
+        delay(frame_delay);
+        console.print!(",{u16}", fib_b);
+        delay(frame_delay);
+
+        // Continue sequence until overflow
+        loop {
+            let next: u16 = fib_a + fib_b;
+            // Overflow: sum wrapped around (next < both operands)
+            if next < fib_a {
+                break;
+            }
+            fib_a = fib_b;
+            fib_b = next;
+            console.print!(",{u16}", fib_b);
+            delay(frame_delay);
+        }
+
+        // New line, restart
+        console.print("\n\0");
     }
-    return FIB_A;
+}
+
+#[interrupt(nmi)]
+fn nmi_handler() {
+    A = RDNMI;
 }
