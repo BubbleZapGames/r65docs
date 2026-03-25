@@ -1136,10 +1136,12 @@ fn main() -> ! {
     nmi_m7b = 0x0000;
     nmi_m7c = 0x0000;
     nmi_m7d = 0x0100;
-    nmi_m7x = 512;
-    nmi_m7y = 512;
-    nmi_hofs = 512 - 128;
-    nmi_vofs = 512 - 112;
+    // Pivot at camera position
+    nmi_m7x = posx_int;
+    nmi_m7y = posy_int;
+    // Scroll: pivot minus screen center, adjusted for horizon
+    nmi_hofs = posx_int - 128;
+    nmi_vofs = posy_int - 112;
 
     // Sky scroll
     nmi_bg2h = 0;
@@ -1189,8 +1191,24 @@ fn main() -> ! {
     Y = 19; nmi_hdma[Y] = A1T1H;
     Y = 20; nmi_hdma[Y] = A1B1;
 
-    // Enable channels 0+1
-    nmi_hdma_en = 0x03;
+    // Channel 2: M7A+M7B ($211B, mode $03 = 2 regs × 2 bytes)
+    Y = 32; nmi_hdma[Y] = 0x03;  // DMAP2: direct, mode 3
+    Y = 33; nmi_hdma[Y] = 0x1B;  // BBAD2: $211B (M7A)
+    dma_set_src!(2, hdma_ab);
+    Y = 34; nmi_hdma[Y] = A1T2L;
+    Y = 35; nmi_hdma[Y] = A1T2H;
+    Y = 36; nmi_hdma[Y] = A1B2;
+
+    // Channel 3: M7C+M7D ($211D, mode $03)
+    Y = 48; nmi_hdma[Y] = 0x03;  // DMAP3
+    Y = 49; nmi_hdma[Y] = 0x1D;  // BBAD3: $211D (M7C)
+    dma_set_src!(3, hdma_cd);
+    Y = 50; nmi_hdma[Y] = A1T3L;
+    Y = 51; nmi_hdma[Y] = A1T3H;
+    Y = 52; nmi_hdma[Y] = A1B3;
+
+    // Enable channels 0-3
+    nmi_hdma_en = 0x0F;
 
     angle = 0;
 
@@ -1206,6 +1224,7 @@ fn main() -> ! {
         wait_autojoy();
         pad = (JOY1H as u16) << 8 | (JOY1L as u16);
 
+        // Rotation: Left/Right
         if pad & Joy::Left as u16 != 0 {
             angle = angle + 2;
         }
@@ -1213,19 +1232,159 @@ fn main() -> ! {
             angle = angle - 2;
         }
 
+        // Fixed horizon for now
+        let sky_lines: u8 = 100;
+        let ground_lines: u8 = 224 - sky_lines;
+        horizon_line = sky_lines;
+
+        // Update HDMA tables for new horizon position
+        Y = 0;
+        hdma_bgmode[Y] = sky_lines; Y++;
+        hdma_bgmode[Y] = 0x01; Y++;     // Mode 1
+        hdma_bgmode[Y] = ground_lines; Y++;
+        hdma_bgmode[Y] = 0x07; Y++;     // Mode 7
+        hdma_bgmode[Y] = 0x00;
+
+        Y = 0;
+        hdma_tm[Y] = sky_lines; Y++;
+        hdma_tm[Y] = 0x12; Y++;         // BG2+OBJ
+        hdma_tm[Y] = ground_lines; Y++;
+        hdma_tm[Y] = 0x11; Y++;         // BG1+OBJ
+        hdma_tm[Y] = 0x00;
+
         // Update M7 matrix from angle
         X = angle & 0xFF;
         let cos_val: i16 = COS_TABLE[X];
         X = (angle + 192) & 0xFF;
         let sin_val: i16 = COS_TABLE[X];
 
+        // Movement: Up/Down moves in facing direction
+        // cos_val/sin_val are 8.8 fixed point. >> 6 gives ~4 pixels/frame speed.
+        if pad & Joy::Up as u16 != 0 {
+            posx_int = (posx_int - ((sin_val as u16) >> 6)) & 0x03FF;
+            posy_int = (posy_int - ((cos_val as u16) >> 6)) & 0x03FF;
+        }
+        if pad & Joy::Down as u16 != 0 {
+            posx_int = (posx_int + ((sin_val as u16) >> 6)) & 0x03FF;
+            posy_int = (posy_int + ((cos_val as u16) >> 6)) & 0x03FF;
+        }
+
+        // Store matrix for NMI (base values, HDMA overrides per scanline)
         nmi_m7a = cos_val as u16;
         nmi_m7d = cos_val as u16;
         nmi_m7b = sin_val as u16;
         nmi_m7c = (0 - sin_val) as u16;
 
-        // Sky parallax
-        nmi_bg2h = angle << 1;
+        // M7 scroll
+        nmi_m7x = posx_int;
+        nmi_m7y = posy_int;
+        let ground_center: u16 = sky_lines as u16 + (ground_lines as u16) / 2;
+        nmi_hofs = posx_int - 128;
+        nmi_vofs = posy_int - ground_center;
+
+        // === Build per-scanline perspective AB/CD tables ===
+        // AB = M7A (cos component), M7B (sin component)
+        // CD = M7C (-sin component), M7D (cos component)
+        // Scale decreases from bottom (near) to horizon (far)
+
+        // Get absolute cos/sin for mul8 (unsigned multiply)
+        let abs_cos: u16;
+        let abs_sin: u16;
+        let neg_a: u8 = 0;
+        let neg_b: u8 = 0;
+        if cos_val < 0 {
+            abs_cos = (0 - cos_val) as u16;
+            neg_a = 1;
+        } else {
+            abs_cos = cos_val as u16;
+        }
+        if sin_val < 0 {
+            abs_sin = (0 - sin_val) as u16;
+            neg_b = 1;
+        } else {
+            abs_sin = sin_val as u16;
+        }
+        // Convert 8.8 fixed to 1.7 for mul8 range
+        let cos7: u8 = (abs_cos >> 1) as u8;
+        let sin7: u8 = (abs_sin >> 1) as u8;
+
+        let ab_pos: u16 = 0;
+        let cd_pos: u16 = 0;
+
+        // Sky portion: identity matrix (held for sky_lines)
+        // 1 block: [count, A_lo, A_hi, B_lo, B_hi]
+        Y = ab_pos; hdma_ab[Y] = sky_lines; ab_pos++;
+        Y = ab_pos; hdma_ab[Y] = 0x00; ab_pos++;  // M7A lo
+        Y = ab_pos; hdma_ab[Y] = 0x01; ab_pos++;  // M7A hi = $0100 = 1.0
+        Y = ab_pos; hdma_ab[Y] = 0x00; ab_pos++;  // M7B lo
+        Y = ab_pos; hdma_ab[Y] = 0x00; ab_pos++;  // M7B hi = 0
+
+        Y = cd_pos; hdma_cd[Y] = sky_lines; cd_pos++;
+        Y = cd_pos; hdma_cd[Y] = 0x00; cd_pos++;  // M7C = 0
+        Y = cd_pos; hdma_cd[Y] = 0x00; cd_pos++;
+        Y = cd_pos; hdma_cd[Y] = 0x00; cd_pos++;  // M7D = $0100
+        Y = cd_pos; hdma_cd[Y] = 0x01; cd_pos++;
+
+        // Ground: per-scanline 1/Z perspective via ZTABLE
+        // ZR starts above the ZTABLE cap zone (Z<255 begins around ZR=2112)
+        // so the horizon has a smooth scale gradient, not a flat wall.
+        // Larger ZR → smaller Z → less zoom → farther away.
+        let zr: u16 = 3200;
+        let zr_step: u16 = 320;
+        let sl: u16 = 0;
+        while sl < ground_lines as u16 {
+            // Look up Z from reciprocal table
+            let z_idx: u16 = zr >> 4;
+            if z_idx > 4095 { z_idx = 4095; }
+            X = z_idx;
+            let z: u8 = ZTABLE[X];
+
+            // Scale: val = z * trig >> 5
+            let val_a: u16 = mul8(z, cos7) >> 5;
+            let val_b: u16 = mul8(z, sin7) >> 5;
+
+            // Apply signs: A=cos, B=sin, C=-sin, D=cos
+            let m7a: u16;
+            let m7b: u16;
+            let m7c: u16;
+            let m7d: u16;
+
+            if neg_a != 0 { m7a = 0 - val_a; } else { m7a = val_a; }
+            if neg_b != 0 { m7b = 0 - val_b; } else { m7b = val_b; }
+            // C = -sin (opposite of B)
+            if neg_b != 0 { m7c = val_b; } else { m7c = 0 - val_b; }
+            // D = cos (same as A)
+            m7d = m7a;
+
+            // Write 1-line block: [1, lo, hi, lo, hi]
+            Y = ab_pos; hdma_ab[Y] = 1; ab_pos++;
+            Y = ab_pos; hdma_ab[Y] = m7a as u8; ab_pos++;
+            Y = ab_pos; hdma_ab[Y] = (m7a >> 8) as u8; ab_pos++;
+            Y = ab_pos; hdma_ab[Y] = m7b as u8; ab_pos++;
+            Y = ab_pos; hdma_ab[Y] = (m7b >> 8) as u8; ab_pos++;
+
+            Y = cd_pos; hdma_cd[Y] = 1; cd_pos++;
+            Y = cd_pos; hdma_cd[Y] = m7c as u8; cd_pos++;
+            Y = cd_pos; hdma_cd[Y] = (m7c >> 8) as u8; cd_pos++;
+            Y = cd_pos; hdma_cd[Y] = m7d as u8; cd_pos++;
+            Y = cd_pos; hdma_cd[Y] = (m7d >> 8) as u8; cd_pos++;
+
+            // Advance ZR toward near plane (increasing ZR = smaller Z = closer)
+            zr = zr + zr_step;
+            sl++;
+        }
+
+        // Terminators
+        Y = ab_pos; hdma_ab[Y] = 0;
+        Y = cd_pos; hdma_cd[Y] = 0;
+
+        // Sky scroll: align sky bottom with horizon, parallax from angle
+        // Sky tiles at rows 20-29 of tilemap (pixels 160-239)
+        // Position sky so bottom of clouds meets the horizon
+        // vscroll = 240 - sky_lines positions row 240-sky_lines at scanline 0
+        nmi_bg2v = 240 - (sky_lines as u16);
+        // Horizontal parallax: scroll opposite to rotation
+        nmi_bg2h = (0 - (angle << 2)) & 0x03FF;
     }
 }
 
