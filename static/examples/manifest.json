@@ -83,6 +83,12 @@
           "name": "Star Field",
           "description": "Center-emitting star field with exponential acceleration and distance-based growth",
           "file": "graphics/starfield.r65"
+        },
+        {
+          "id": "dizworld",
+          "name": "Dizworld Flyer",
+          "description": "Mode 7 perspective flying camera with HDMA, sky horizon, and animated bird sprite",
+          "file": "graphics/dizworld.r65"
         }
       ]
     },

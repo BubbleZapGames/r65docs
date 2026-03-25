@@ -1,0 +1,1255 @@
+// dizworld - Mode Y "Flyer" Perspective Demo
+// Based on dizworld by Brad Smith (rainwarrior), CC BY 4.0
+//
+// Flying camera over a tiled Mode 7 landscape with Mode 1 sky.
+// HDMA switches between Mode 1 (sky) and Mode 7 (ground) mid-frame.
+// Per-scanline perspective matrix via HDMA gives 3D depth illusion.
+//
+// Controls:
+//   D-pad Left/Right: rotate camera
+//   D-pad Up/Down:    move forward/backward
+//   L/R shoulder:     raise/lower camera height
+//   Select:           reset position
+
+#[snesrom(name="DIZWORLD FLYER", hirom, fastrom)]
+
+include!("sneslib.r65")
+include!("math.r65")
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+const SCREEN_W: u16 = 256;
+const SCREEN_H: u16 = 224;
+
+// Bird position on screen (fixed)
+const MODE_Y_SX: u8 = 128;    // Bird X center
+const MODE_Y_SY: u8 = 168;    // Bird ground shadow Y
+
+// Height limits
+const HEIGHT_BASE: u16 = 16;  // Minimum height
+const HEIGHT_MAX: u16 = 200;  // Maximum height
+const HEIGHT_INIT: u16 = 40;  // Starting height
+
+// Perspective parameters
+const PV_L0: u16 = 8;         // First ground scanline (relative to horizon)
+const PV_L1: u16 = 128;       // Last ground scanline range
+const PV_S0: u16 = 256;       // Near plane distance
+const PV_S1: u16 = 2048;      // Far plane distance
+
+// Movement speeds
+const ROTATE_SPEED: u16 = 2;
+const MOVE_SPEED: u16 = 3;
+const HEIGHT_SPEED: u16 = 2;
+
+// VRAM layout (word addresses)
+// Must avoid overlap: sky chr (184 tiles × 16 words = $B80 words)
+const VRAM_M7_BASE: u16 = 0x0000;   // Mode 7 tilemap+chr (32KB interleaved)
+const VRAM_OBJ_BASE: u16 = 0x4000;  // Sprite chr ($4000 aligned)
+const VRAM_SKY_CHR: u16 = 0x6000;   // Sky chr ($6000-$6B7F)
+const VRAM_SKY_NMT: u16 = 0x6C00;   // Sky nametable ($6C00-$6FBF, no overlap)
+
+// OAM sprite indices
+const SPR_BIRD: u8 = 0;       // Bird sprite (32x32)
+const SPR_SHADOW: u8 = 1;     // Shadow sprite (32x32)
+
+// Bird animation tile bases (each 32x32 = 4 tiles in 16-wide layout)
+static BIRD_FRAMES: [u8; 4] = [0x00, 0x04, 0x08, 0x04];
+
+// Bird facing attributes
+const BIRD_ATTR_UP: u8 = OamPriority::InFront as u8 | 0x40;    // V-flip
+const BIRD_ATTR_DOWN: u8 = OamPriority::InFront as u8;          // Normal
+const BIRD_ATTR_NEUTRAL: u8 = OamPriority::InFront as u8 | 0x80; // H-flip for idle
+
+// Shadow tile and attr
+const SHADOW_TILE: u8 = 0x0C;
+const SHADOW_ATTR: u8 = OamPriority::Behind as u8;
+
+// ============================================================================
+// COMPILE-TIME TABLES
+// ============================================================================
+
+// Cosine table: 256 entries, amplitude 256 (8.8 fixed point)
+// Sine = COS_TABLE[(index + 192) & 0xFF]
+const fn build_cos_table() -> [i16; 256] {
+    let mut t: [i16; 256] = [0; 256];
+    for i in 0..256 {
+        t[i] = fixed_cos(i as u16, 256, 256);
+    }
+    return t;
+}
+static COS_TABLE: [i16; 256] = build_cos_table();
+
+// Z reciprocal table: ZTABLE[i] = min(255, (1<<15)/i) for i>0, 255 for i=0
+// Used to convert 1/Z interpolant back to Z for perspective scaling
+const fn build_z_table() -> [u8; 4096] {
+    let mut t: [u8; 4096] = [0; 4096];
+    t[0] = 255;
+    for i in 1..4096 {
+        let v: u16 = 32768 / (i as u16);
+        if v > 255 { t[i] = 255; } else { t[i] = v as u8; }
+    }
+    return t;
+}
+
+// Horizon COLDATA fade table (33 bytes)
+// Sky fades from black to sky color; ground fades from bright to black
+const fn build_fade_table() -> [u8; 33] {
+    let mut t: [u8; 33] = [0; 33];
+    // First byte: all-channels black
+    t[0] = 0xE0;
+    // 16 bytes: fade from black ($E0) up toward sky ($E7)
+    for i in 0..16 {
+        let intensity: u8 = (i as u8) / 2;
+        t[1 + i] = 0xE0 | intensity;
+    }
+    // 16 bytes: fade from bright ($FC) down toward black ($E0)
+    for i in 0..16 {
+        let intensity: u8 = 0x1C - ((i as u8) * 0x1C / 16);
+        t[17 + i] = 0xE0 | intensity;
+    }
+    return t;
+}
+static FADE_TABLE: [u8; 33] = build_fade_table();
+
+// ============================================================================
+// RAM VARIABLES
+// ============================================================================
+
+// Camera state
+#[zeropage]
+static mut angle: u16;             // Rotation angle (0-255 in low byte)
+#[zeropage]
+static mut height: u16;            // Camera height above ground
+#[zeropage]
+static mut posx_frac: u16;         // X position fractional (8-bit used)
+#[zeropage]
+static mut posx_int: u16;          // X position integer (10-bit, 0-1023)
+#[zeropage]
+static mut posy_frac: u16;         // Y position fractional
+#[zeropage]
+static mut posy_int: u16;          // Y position integer (10-bit)
+
+// NMI communication
+#[zeropage]
+static mut nmi_ready: u8;          // 0=skip, 1=update, 2=force blank
+#[zeropage]
+static mut nmi_count: u16;         // Frame counter
+
+// Mode 7 matrix values for NMI to write
+#[zeropage]
+static mut nmi_m7a: u16;
+#[zeropage]
+static mut nmi_m7b: u16;
+#[zeropage]
+static mut nmi_m7c: u16;
+#[zeropage]
+static mut nmi_m7d: u16;
+#[zeropage]
+static mut nmi_m7x: u16;
+#[zeropage]
+static mut nmi_m7y: u16;
+#[zeropage]
+static mut nmi_hofs: u16;
+#[zeropage]
+static mut nmi_vofs: u16;
+#[zeropage]
+static mut nmi_bg2h: u16;          // Sky BG2 horizontal scroll
+#[zeropage]
+static mut nmi_bg2v: u16;          // Sky BG2 vertical scroll
+#[zeropage]
+static mut nmi_tm: u8;             // Main screen layers
+
+// Perspective rebuild temporaries
+#[zeropage]
+static mut pv_cos: i16;
+#[zeropage]
+static mut pv_sin: i16;
+#[zeropage]
+static mut pv_sa: u16;             // Scale adjustment
+#[zeropage]
+static mut pv_zr0: u16;            // 1/Z at near plane
+#[zeropage]
+static mut pv_zr1: u16;            // 1/Z at far plane
+#[zeropage]
+static mut pv_zr_step: u16;        // Per-scanline 1/Z increment
+#[zeropage]
+static mut pv_scale_a: u8;         // Prescaled cos for mul8
+#[zeropage]
+static mut pv_scale_b: u8;         // Prescaled sin for mul8
+#[zeropage]
+static mut pv_scale_c: u8;         // Prescaled -sin for mul8
+#[zeropage]
+static mut pv_scale_d: u8;         // Prescaled cos for mul8
+#[zeropage]
+static mut pv_negate_a: u8;        // Negate flag for A coefficient
+#[zeropage]
+static mut pv_negate_b: u8;        // Negate flag for B coefficient
+#[zeropage]
+static mut pv_negate_c: u8;        // Negate flag for C coefficient
+#[zeropage]
+static mut pv_negate_d: u8;        // Negate flag for D coefficient
+
+// Double buffer selector (0 or 1)
+#[zeropage]
+static mut pv_buffer: u8;
+
+// Horizon scanline (where sky ends, ground begins)
+#[zeropage]
+static mut horizon_line: u8;
+
+// Joypad
+#[zeropage]
+static mut pad: u16;
+#[zeropage]
+static mut pad_prev: u16;
+
+// Scratch variables for 32-bit math
+#[zeropage]
+static mut math_a_lo: u16;
+#[zeropage]
+static mut math_a_hi: u16;
+#[zeropage]
+static mut math_b_lo: u16;
+#[zeropage]
+static mut math_b_hi: u16;
+#[zeropage]
+static mut math_r_lo: u16;
+#[zeropage]
+static mut math_r_hi: u16;
+
+// OAM buffer (4 sprites * 4 bytes + 32-byte extended table)
+#[lowram]
+static mut oam_buf: [u8; 544];
+
+// HDMA tables — double buffered (2 buffers, flat layout)
+// Buffer 0 at offset 0, buffer 1 at offset BUF_SIZE.
+const HDMA_SM_BUF: u16 = 240;   // Size per buffer for 1-byte HDMA tables
+const HDMA_LG_BUF: u16 = 1024;  // Size per buffer for 4-byte HDMA tables
+
+// Channel 0: BGMODE ($2105)
+#[ram]
+static mut hdma_bgmode: [u8; 480];    // 240 * 2
+
+// Channel 1: TM ($212C)
+#[ram]
+static mut hdma_tm: [u8; 480];        // 240 * 2
+
+// Channel 2: M7A+M7B ($211B) — 4 bytes per scanline
+#[ram]
+static mut hdma_ab: [u8; 2048];       // 1024 * 2
+
+// Channel 3: M7C+M7D ($211D) — 4 bytes per scanline
+#[ram]
+static mut hdma_cd: [u8; 2048];       // 1024 * 2
+
+// Channel 4: COLDATA ($2132)
+#[ram]
+static mut hdma_fade: [u8; 480];      // 240 * 2
+
+// Z table in RAM (too large for ROM direct access in some configs)
+#[bank(2)]
+static ZTABLE: [u8; 4096] = build_z_table();
+
+// ============================================================================
+// BANK 0 - MAIN CODE
+// ============================================================================
+#[bank(0)]
+
+// --- 16x16 unsigned multiply -> 32 bits ---
+// Returns result in math_r_lo (low 16) and math_r_hi (high 16)
+fn umul16(a_val: u16, b_val: u16) {
+    // Decompose: a = ah:al, b = bh:bl
+    // result = al*bl + (al*bh + ah*bl)<<8 + ah*bh<<16
+    let a_lo: u8 = a_val as u8;
+    let a_hi: u8 = (a_val >> 8) as u8;
+    let b_lo: u8 = b_val as u8;
+    let b_hi: u8 = (b_val >> 8) as u8;
+
+    // P0 = a_lo * b_lo (16-bit result)
+    let p0: u16 = mul8(a_lo, b_lo);
+    math_r_lo = p0;
+    math_r_hi = 0;
+
+    // P1 = a_lo * b_hi, add at byte 1
+    if b_hi != 0 {
+        let p1: u16 = mul8(a_lo, b_hi);
+        let mid: u16 = (math_r_lo >> 8) + (p1 & 0xFF);
+        math_r_lo = (math_r_lo & 0xFF) | (mid << 8);
+        math_r_hi = math_r_hi + (p1 >> 8) + (mid >> 8);
+    }
+
+    // P2 = a_hi * b_lo, add at byte 1
+    if a_hi != 0 {
+        let p2: u16 = mul8(a_hi, b_lo);
+        let mid2: u16 = (math_r_lo >> 8) + (p2 & 0xFF);
+        math_r_lo = (math_r_lo & 0xFF) | (mid2 << 8);
+        math_r_hi = math_r_hi + (p2 >> 8) + (mid2 >> 8);
+    }
+
+    // P3 = a_hi * b_hi, add at byte 2
+    if a_hi != 0 && b_hi != 0 {
+        let p3: u16 = mul8(a_hi, b_hi);
+        math_r_hi = math_r_hi + p3;
+    }
+}
+
+// --- 32-bit / 16-bit unsigned division ---
+// Divides math_a_hi:math_a_lo by divisor
+// Result in math_r_hi:math_r_lo, remainder discarded
+fn udiv32_16(divisor: u16) {
+    if divisor == 0 {
+        math_r_lo = 0xFFFF;
+        math_r_hi = 0xFFFF;
+        return;
+    }
+
+    math_r_lo = 0;
+    math_r_hi = 0;
+    let rem: u16 = 0;
+
+    let bit: u16 = 32;
+    while bit > 0 {
+        bit--;
+
+        // Shift remainder left by 1, bring in top bit of dividend
+        rem = rem << 1;
+        if math_a_hi & 0x8000 != 0 {
+            rem = rem | 1;
+        }
+
+        // Shift dividend left by 1
+        math_a_hi = math_a_hi << 1;
+        if math_a_lo & 0x8000 != 0 {
+            math_a_hi = math_a_hi | 1;
+        }
+        math_a_lo = math_a_lo << 1;
+
+        // Shift result left by 1
+        math_r_hi = math_r_hi << 1;
+        if math_r_lo & 0x8000 != 0 {
+            math_r_hi = math_r_hi | 1;
+        }
+        math_r_lo = math_r_lo << 1;
+
+        // If remainder >= divisor, subtract and set result bit
+        if rem >= divisor {
+            rem = rem - divisor;
+            math_r_lo = math_r_lo | 1;
+        }
+    }
+}
+
+// --- Sign extend: 0x0000 if positive, 0xFFFF if negative (bit 15 set) ---
+fn sign_extend(val: u16) -> u16 {
+    if val & 0x8000 != 0 {
+        return 0xFFFF;
+    }
+    return 0;
+}
+
+// --- Add signed 16-bit delta to 10.8 fixed-point position ---
+// pos_frac/pos_int are updated. Integer part masked to 10 bits (0-1023).
+fn add_to_posx(delta: i16) {
+    let d: u16 = delta as u16;
+    let old_frac: u16 = posx_frac;
+    posx_frac = posx_frac + d;
+    // Detect carry: if adding positive and result < old, or via sign
+    if delta >= 0 {
+        if posx_frac < old_frac {
+            posx_int = posx_int + 1;
+        }
+    } else {
+        if posx_frac > old_frac {
+            posx_int = posx_int - 1;
+        }
+    }
+    posx_int = posx_int & 0x03FF;
+}
+
+fn add_to_posy(delta: i16) {
+    let d: u16 = delta as u16;
+    let old_frac: u16 = posy_frac;
+    posy_frac = posy_frac + d;
+    if delta >= 0 {
+        if posy_frac < old_frac {
+            posy_int = posy_int + 1;
+        }
+    } else {
+        if posy_frac > old_frac {
+            posy_int = posy_int - 1;
+        }
+    }
+    posy_int = posy_int & 0x03FF;
+}
+
+// ============================================================================
+// GRAPHICS UPLOAD
+// ============================================================================
+
+fn upload_mode7_data() {
+    // Mode 7 VRAM is interleaved: even bytes = tilemap (low), odd bytes = chr (high)
+    // bg.md7 is 32768 bytes of interleaved data.
+    // dma_copy_vram_const uses DMA mode 1 (2 regs: VMDATAL/VMDATAH) which is
+    // correct for interleaved Mode 7 data.
+    dma_copy_vram_const!(0, BG_MD7_DATA, VRAM_M7_BASE, 32768);
+}
+
+fn upload_sky_data() {
+    // Sky chr to VRAM
+    dma_copy_vram_const!(0, SKY_CHR_DATA, VRAM_SKY_CHR, 5888);
+    // Sky nametable to VRAM
+    dma_copy_vram_const!(1, SKY_NMT_DATA, VRAM_SKY_NMT, 1920);
+}
+
+fn upload_sprite_data() {
+    // Sprite chr to VRAM at OBJ base
+    dma_copy_vram_const!(0, FG_CHR_DATA, VRAM_OBJ_BASE, 10240);
+}
+
+fn upload_palettes() {
+    // BG palette (Mode 7 ground + sky share palette 0)
+    dma_copy_cgram_const!(0, BG_PAL_DATA, 0, 29);
+    // Sprite palette to OBJ palette 0 (CGRAM $80)
+    dma_copy_cgram_const!(1, FG_PAL_DATA, 128, 14);
+}
+
+// ============================================================================
+// OAM MANAGEMENT
+// ============================================================================
+
+fn oam_init() {
+    // Clear all 128 sprites off-screen
+    Y = 0;
+    while Y < 512 {
+        oam_buf[Y] = 0;      // X
+        Y++;
+        oam_buf[Y] = 240;    // Y (off-screen)
+        Y++;
+        oam_buf[Y] = 0;      // Tile
+        Y++;
+        oam_buf[Y] = 0;      // Attr
+        Y++;
+    }
+    // Extended table: all sprites small (0)
+    while Y < 544 {
+        oam_buf[Y] = 0;
+        Y++;
+    }
+}
+
+fn oam_set_sprite(index: u8, sx: u8, sy: u8, tile: u8, attr: u8, large: u8) {
+    // Write 4-byte entry
+    let base: u16 = (index as u16) * 4;
+    Y = base;
+    oam_buf[Y] = sx;
+    Y++;
+    oam_buf[Y] = sy;
+    Y++;
+    oam_buf[Y] = tile;
+    Y++;
+    oam_buf[Y] = attr;
+
+    // Extended table: 2 bits per sprite (bit 0 = X msb, bit 1 = large)
+    // Each byte covers 4 sprites. Use branching to avoid variable shifts.
+    let ext_byte: u16 = 512 + ((index as u16) >> 2);
+    let slot: u8 = index & 0x03;
+    Y = ext_byte;
+    let old: u8 = oam_buf[Y];
+    let result: u8;
+    if slot == 0 {
+        result = (old & 0xFC) | (large & 0x03);
+    } else if slot == 1 {
+        result = (old & 0xF3) | ((large & 0x03) << 2);
+    } else if slot == 2 {
+        result = (old & 0xCF) | ((large & 0x03) << 4);
+    } else {
+        result = (old & 0x3F) | ((large & 0x03) << 6);
+    }
+    oam_buf[Y] = result;
+}
+
+fn update_sprites() {
+    // Bird sprite: animated, positioned at screen center
+    // Calculate bird screen Y based on height (higher = further up)
+    let bird_y: u8 = MODE_Y_SY - (height >> 2) as u8;
+
+    // Animation frame from nmi_count
+    let frame_idx: u8 = ((nmi_count >> 3) & 0x03) as u8;
+    Y = frame_idx as u16;
+    let bird_tile: u8 = BIRD_FRAMES[Y];
+
+    // Bird facing direction: check if moving forward or backward
+    let bird_attr: u8;
+    if pad & Joy::Up as u16 != 0 {
+        bird_attr = BIRD_ATTR_UP;
+    } else if pad & Joy::Down as u16 != 0 {
+        bird_attr = BIRD_ATTR_DOWN;
+    } else {
+        bird_attr = BIRD_ATTR_DOWN;
+    }
+
+    // Bird at center of screen, offset for 32x32 sprite
+    oam_set_sprite(SPR_BIRD, MODE_Y_SX - 16, bird_y - 16, bird_tile, bird_attr, 0x02);
+
+    // Shadow on the ground at MODE_Y_SY
+    oam_set_sprite(SPR_SHADOW, MODE_Y_SX - 16, MODE_Y_SY - 8, SHADOW_TILE, SHADOW_ATTR, 0x02);
+}
+
+// ============================================================================
+// PERSPECTIVE REBUILD
+// ============================================================================
+
+// Compute per-scanline Mode 7 HDMA tables for perspective ground rendering.
+// This is the core of the demo: it creates the illusion of 3D by scaling
+// the Mode 7 matrix coefficients differently for each scanline.
+fn pv_rebuild() {
+    // Determine which buffer to write to (opposite of current display)
+    // Compute base offsets into flat arrays for this buffer
+    // DEBUG: disable double buffering — always use buffer 0
+    let sm_off: u16 = 0;
+    let lg_off: u16 = 0;
+
+    // Compute horizon position based on camera height
+    // Higher camera = lower horizon (more ground visible)
+    let sky_lines: u8;
+    if height < 32 {
+        sky_lines = 160 - (height as u8);
+    } else if height < 128 {
+        sky_lines = 128 - (height >> 1) as u8;
+    } else {
+        sky_lines = 64;
+    }
+    horizon_line = sky_lines;
+
+    let ground_lines: u8 = (224 - sky_lines as u16) as u8;
+
+    // Get cos/sin for current angle
+    X = angle & 0xFF;
+    pv_cos = COS_TABLE[X];
+    X = (angle + 192) & 0xFF;    // sin = cos(angle + 192)
+    pv_sin = COS_TABLE[X];
+
+    // Compute ZR0 and ZR1: reciprocal depth at near/far scanlines
+    // ZR0 = (1<<21) / S0, ZR1 = (1<<21) / S1
+    // Using 32/16 division
+    math_a_lo = 0;
+    math_a_hi = 0x0020;  // 1<<21 = 0x00200000
+    udiv32_16(PV_S0);
+    pv_zr0 = math_r_lo;
+
+    math_a_lo = 0;
+    math_a_hi = 0x0020;
+    udiv32_16(PV_S1);
+    pv_zr1 = math_r_lo;
+
+    // ZR step: (ZR1 - ZR0) / ground_lines
+    if ground_lines > 1 {
+        let zr_range: u16;
+        if pv_zr1 > pv_zr0 {
+            zr_range = pv_zr1 - pv_zr0;
+        } else {
+            zr_range = pv_zr0 - pv_zr1;
+        }
+        math_a_lo = zr_range;
+        math_a_hi = 0;
+        udiv32_16(ground_lines as u16);
+        pv_zr_step = math_r_lo;
+    } else {
+        pv_zr_step = 0;
+    }
+
+    // Compute SA (scale adjustment based on height)
+    // SA = (height * 256) / (S0 * (L1-L0)), clamped
+    if height > 0 {
+        umul16(height, 256);
+        math_a_lo = math_r_lo;
+        math_a_hi = math_r_hi;
+        // Divisor: S0 * (L1-L0) / 256 simplified
+        // Use approximate: SA = height / (ground_lines)
+        udiv32_16(ground_lines as u16);
+        if math_r_lo > 255 {
+            pv_sa = 255;
+        } else if math_r_lo == 0 {
+            pv_sa = 1;
+        } else {
+            pv_sa = math_r_lo;
+        }
+    } else {
+        pv_sa = 1;
+    }
+
+    // Prescale cos/sin by SA for the mul8 calls in the scanline loop.
+    // We need absolute values for mul8, track signs separately.
+    let abs_cos: u16;
+    let abs_sin: u16;
+    if pv_cos < 0 {
+        abs_cos = (0 - pv_cos) as u16;
+        pv_negate_a = 1;
+        pv_negate_d = 1;
+    } else {
+        abs_cos = pv_cos as u16;
+        pv_negate_a = 0;
+        pv_negate_d = 0;
+    }
+    if pv_sin < 0 {
+        abs_sin = (0 - pv_sin) as u16;
+        pv_negate_b = 1;
+        pv_negate_c = 0;  // C = -sin, so negative sin means positive C
+    } else {
+        abs_sin = pv_sin as u16;
+        pv_negate_b = 0;
+        pv_negate_c = 1;  // C = -sin
+    }
+
+    // Convert 8.8 cos/sin to 1.7 format for the per-scanline mul8 loop.
+    // scale_a/scale_c = horizontal axis = just cos/sin >> 1
+    // scale_b/scale_d = vertical axis = (SA * cos/sin) >> 9 if SH!=0, else same as a/c
+    let cos_7: u8 = (abs_cos >> 1) as u8;  // 1.7 fixed (cos / 2)
+    let sin_7: u8 = (abs_sin >> 1) as u8;  // 1.7 fixed (sin / 2)
+
+    pv_scale_a = cos_7;   // Horizontal cos
+    pv_scale_c = sin_7;   // Horizontal sin
+
+    // Vertical scales: when SH=0, same as horizontal (uniform scaling)
+    pv_scale_d = cos_7;
+    pv_scale_b = sin_7;
+
+    // Fallback if scales are zero (avoid invisible ground)
+    if pv_scale_a == 0 && pv_scale_b == 0 {
+        pv_scale_a = 1;
+        pv_scale_d = 1;
+    }
+
+    // --- Build HDMA tables ---
+    // Position cursors start at the buffer offset for double buffering
+
+    let ab_pos: u16 = lg_off;
+    let cd_pos: u16 = lg_off;
+    let bgm_pos: u16 = sm_off;
+    let tm_pos: u16 = sm_off;
+    let fade_pos: u16 = sm_off;
+
+    // === Sky portion: Mode 1, BG2 visible ===
+    // HDMA repeat mode: header byte = $80 | count, then 1 data byte (reused each line)
+    // BGMODE: repeat Mode 1 for sky_lines scanlines
+    if sky_lines > 127 {
+        Y = bgm_pos; hdma_bgmode[Y] = 0x80 | 127; bgm_pos++;
+        Y = bgm_pos; hdma_bgmode[Y] = BG::Mode1 as u8; bgm_pos++;
+        let remain: u8 = sky_lines - 127;
+        Y = bgm_pos; hdma_bgmode[Y] = 0x80 | remain; bgm_pos++;
+        Y = bgm_pos; hdma_bgmode[Y] = BG::Mode1 as u8; bgm_pos++;
+    } else {
+        Y = bgm_pos; hdma_bgmode[Y] = 0x80 | sky_lines; bgm_pos++;
+        Y = bgm_pos; hdma_bgmode[Y] = BG::Mode1 as u8; bgm_pos++;
+    }
+
+    // TM: repeat BG2+OBJ for sky portion
+    if sky_lines > 127 {
+        Y = tm_pos; hdma_tm[Y] = 0x80 | 127; tm_pos++;
+        Y = tm_pos; hdma_tm[Y] = Screen::BG2 as u8 | Screen::Obj as u8; tm_pos++;
+        let remain2: u8 = sky_lines - 127;
+        Y = tm_pos; hdma_tm[Y] = 0x80 | remain2; tm_pos++;
+        Y = tm_pos; hdma_tm[Y] = Screen::BG2 as u8 | Screen::Obj as u8; tm_pos++;
+    } else {
+        Y = tm_pos; hdma_tm[Y] = 0x80 | sky_lines; tm_pos++;
+        Y = tm_pos; hdma_tm[Y] = Screen::BG2 as u8 | Screen::Obj as u8; tm_pos++;
+    }
+
+    // AB/CD: repeat identity matrix during sky
+    // Repeat mode for 4-byte HDMA: header = $80|count, then 4 data bytes
+    // AB = M7A(1.0), M7B(0.0): [0x00, 0x01, 0x00, 0x00]
+    // CD = M7C(0.0), M7D(1.0): [0x00, 0x00, 0x00, 0x01]
+    if sky_lines > 127 {
+        let remain3: u8 = sky_lines - 127;
+        Y = ab_pos; hdma_ab[Y] = 0x80 | 127; ab_pos++;
+        Y = ab_pos; hdma_ab[Y] = 0x00; ab_pos++;
+        Y = ab_pos; hdma_ab[Y] = 0x01; ab_pos++;
+        Y = ab_pos; hdma_ab[Y] = 0x00; ab_pos++;
+        Y = ab_pos; hdma_ab[Y] = 0x00; ab_pos++;
+        Y = ab_pos; hdma_ab[Y] = 0x80 | remain3; ab_pos++;
+        Y = ab_pos; hdma_ab[Y] = 0x00; ab_pos++;
+        Y = ab_pos; hdma_ab[Y] = 0x01; ab_pos++;
+        Y = ab_pos; hdma_ab[Y] = 0x00; ab_pos++;
+        Y = ab_pos; hdma_ab[Y] = 0x00; ab_pos++;
+
+        Y = cd_pos; hdma_cd[Y] = 0x80 | 127; cd_pos++;
+        Y = cd_pos; hdma_cd[Y] = 0x00; cd_pos++;
+        Y = cd_pos; hdma_cd[Y] = 0x00; cd_pos++;
+        Y = cd_pos; hdma_cd[Y] = 0x00; cd_pos++;
+        Y = cd_pos; hdma_cd[Y] = 0x01; cd_pos++;
+        Y = cd_pos; hdma_cd[Y] = 0x80 | remain3; cd_pos++;
+        Y = cd_pos; hdma_cd[Y] = 0x00; cd_pos++;
+        Y = cd_pos; hdma_cd[Y] = 0x00; cd_pos++;
+        Y = cd_pos; hdma_cd[Y] = 0x00; cd_pos++;
+        Y = cd_pos; hdma_cd[Y] = 0x01; cd_pos++;
+    } else {
+        Y = ab_pos; hdma_ab[Y] = 0x80 | sky_lines; ab_pos++;
+        Y = ab_pos; hdma_ab[Y] = 0x00; ab_pos++;
+        Y = ab_pos; hdma_ab[Y] = 0x01; ab_pos++;
+        Y = ab_pos; hdma_ab[Y] = 0x00; ab_pos++;
+        Y = ab_pos; hdma_ab[Y] = 0x00; ab_pos++;
+
+        Y = cd_pos; hdma_cd[Y] = 0x80 | sky_lines; cd_pos++;
+        Y = cd_pos; hdma_cd[Y] = 0x00; cd_pos++;
+        Y = cd_pos; hdma_cd[Y] = 0x00; cd_pos++;
+        Y = cd_pos; hdma_cd[Y] = 0x00; cd_pos++;
+        Y = cd_pos; hdma_cd[Y] = 0x01; cd_pos++;
+    }
+
+    // Fade: repeat black ($E0) for sky portion
+    if sky_lines > 127 {
+        Y = fade_pos; hdma_fade[Y] = 0x80 | 127; fade_pos++;
+        Y = fade_pos; hdma_fade[Y] = 0xE0; fade_pos++;
+        let remain4: u8 = sky_lines - 127;
+        Y = fade_pos; hdma_fade[Y] = 0x80 | remain4; fade_pos++;
+        Y = fade_pos; hdma_fade[Y] = 0xE0; fade_pos++;
+    } else {
+        Y = fade_pos; hdma_fade[Y] = 0x80 | sky_lines; fade_pos++;
+        Y = fade_pos; hdma_fade[Y] = 0xE0; fade_pos++;
+    }
+
+    // === Horizon fade (16 lines around transition) ===
+    // Write 16 lines of fade as individual scanline entries
+    let fade_lines: u8;
+    if ground_lines > 16 { fade_lines = 16; } else { fade_lines = ground_lines; }
+
+    // === Ground portion: Mode 7, BG1 visible ===
+    // BGMODE: repeat Mode 7 for all ground lines ($80 = repeat mode)
+    if ground_lines > 127 {
+        let gremain: u8 = ground_lines - 127;
+        Y = bgm_pos; hdma_bgmode[Y] = 0x80 | 127; bgm_pos++;
+        Y = bgm_pos; hdma_bgmode[Y] = BG::Mode7 as u8; bgm_pos++;
+        Y = bgm_pos; hdma_bgmode[Y] = 0x80 | gremain; bgm_pos++;
+        Y = bgm_pos; hdma_bgmode[Y] = BG::Mode7 as u8; bgm_pos++;
+    } else {
+        Y = bgm_pos; hdma_bgmode[Y] = 0x80 | ground_lines; bgm_pos++;
+        Y = bgm_pos; hdma_bgmode[Y] = BG::Mode7 as u8; bgm_pos++;
+    }
+    // Terminator
+    Y = bgm_pos; hdma_bgmode[Y] = 0;
+
+    // TM: repeat BG1+OBJ for all ground lines
+    if ground_lines > 127 {
+        let gremain2: u8 = ground_lines - 127;
+        Y = tm_pos; hdma_tm[Y] = 0x80 | 127; tm_pos++;
+        Y = tm_pos; hdma_tm[Y] = Screen::BG1 as u8 | Screen::Obj as u8; tm_pos++;
+        Y = tm_pos; hdma_tm[Y] = 0x80 | gremain2; tm_pos++;
+        Y = tm_pos; hdma_tm[Y] = Screen::BG1 as u8 | Screen::Obj as u8; tm_pos++;
+    } else {
+        Y = tm_pos; hdma_tm[Y] = 0x80 | ground_lines; tm_pos++;
+        Y = tm_pos; hdma_tm[Y] = Screen::BG1 as u8 | Screen::Obj as u8; tm_pos++;
+    }
+    Y = tm_pos; hdma_tm[Y] = 0;
+
+    // Fade: ground portion - 16 lines of fade then hold
+    // Continuous mode (no $80): each line gets a unique fade value
+    if fade_lines > 0 {
+        Y = fade_pos; hdma_fade[Y] = fade_lines; fade_pos++;
+        let fi: u8 = 0;
+        while fi < fade_lines {
+            let fade_idx: u8 = 17 + fi;  // Ground portion of fade table
+            Y = fade_idx as u16;
+            let fade_val: u8 = FADE_TABLE[Y];
+            Y = fade_pos; hdma_fade[Y] = fade_val; fade_pos++;
+            fi++;
+        }
+    }
+    // Remaining ground lines: repeat hold at black ($80 = repeat mode)
+    let remain_ground: u8 = ground_lines - fade_lines;
+    if remain_ground > 0 {
+        if remain_ground > 127 {
+            Y = fade_pos; hdma_fade[Y] = 0x80 | 127; fade_pos++;
+            Y = fade_pos; hdma_fade[Y] = 0xE0; fade_pos++;
+            let fr: u8 = remain_ground - 127;
+            Y = fade_pos; hdma_fade[Y] = 0x80 | fr; fade_pos++;
+            Y = fade_pos; hdma_fade[Y] = 0xE0; fade_pos++;
+        } else {
+            Y = fade_pos; hdma_fade[Y] = 0x80 | remain_ground; fade_pos++;
+            Y = fade_pos; hdma_fade[Y] = 0xE0; fade_pos++;
+        }
+    }
+    Y = fade_pos; hdma_fade[Y] = 0;
+
+    // === Build per-scanline perspective M7 matrix ===
+    // For each ground scanline, compute the Mode 7 matrix coefficients
+    // that give correct perspective depth.
+    //
+    // ZR linearly interpolates from pv_zr0 (near) to pv_zr1 (far).
+    // Z = ZTABLE[ZR >> 4] gives depth for this scanline.
+    // Matrix = Z * (prescaled rotation), giving A B C D.
+
+    let zr: u16 = pv_zr0;  // Start at near plane
+    let scanline: u16 = 0;
+
+    // Write ground portion of AB/CD as continuous-mode chunks
+    // Continuous mode (bit 7 clear): each scanline gets unique 4-byte data
+    if ground_lines > 127 {
+        // First chunk header: 127 lines continuous (no $80)
+        Y = ab_pos; hdma_ab[Y] = 127; ab_pos++;
+        Y = cd_pos; hdma_cd[Y] = 127; cd_pos++;
+    } else {
+        Y = ab_pos; hdma_ab[Y] = ground_lines; ab_pos++;
+        Y = cd_pos; hdma_cd[Y] = ground_lines; cd_pos++;
+    }
+
+    while scanline < ground_lines as u16 {
+        // At scanline 127, insert second chunk header (continuous)
+        if scanline == 127 {
+            let gleft: u8 = ground_lines - 127;
+            Y = ab_pos; hdma_ab[Y] = gleft; ab_pos++;
+            Y = cd_pos; hdma_cd[Y] = gleft; cd_pos++;
+        }
+
+        // Look up Z from table: index = zr >> 4
+        let z_idx: u16 = zr >> 4;
+        if z_idx > 4095 { z_idx = 4095; }
+        X = z_idx;
+        let z: u8 = ZTABLE[X];
+
+        // Compute matrix coefficients: coeff = mul8(z, scale) >> 5
+        // A = z * scale_a >> 5 (cosine component)
+        let val_a: u16 = mul8(z, pv_scale_a) >> 5;
+        let val_b: u16 = mul8(z, pv_scale_b) >> 5;
+
+        // Apply negation based on rotation quadrant
+        let m7a: u16;
+        let m7b: u16;
+        let m7c: u16;
+        let m7d: u16;
+
+        if pv_negate_a != 0 {
+            m7a = 0 - val_a;
+        } else {
+            m7a = val_a;
+        }
+
+        if pv_negate_b != 0 {
+            m7b = 0 - val_b;
+        } else {
+            m7b = val_b;
+        }
+
+        if pv_negate_c != 0 {
+            m7c = 0 - val_b;   // C uses sin magnitude
+        } else {
+            m7c = val_b;
+        }
+
+        if pv_negate_d != 0 {
+            m7d = 0 - val_a;   // D uses cos magnitude
+        } else {
+            m7d = val_a;
+        }
+
+        // Write AB: [M7A_lo, M7A_hi, M7B_lo, M7B_hi]
+        Y = ab_pos;     hdma_ab[Y] = m7a as u8;
+        Y = ab_pos + 1; hdma_ab[Y] = (m7a >> 8) as u8;
+        Y = ab_pos + 2; hdma_ab[Y] = m7b as u8;
+        Y = ab_pos + 3; hdma_ab[Y] = (m7b >> 8) as u8;
+        ab_pos = ab_pos + 4;
+
+        // Write CD: [M7C_lo, M7C_hi, M7D_lo, M7D_hi]
+        Y = cd_pos;     hdma_cd[Y] = m7c as u8;
+        Y = cd_pos + 1; hdma_cd[Y] = (m7c >> 8) as u8;
+        Y = cd_pos + 2; hdma_cd[Y] = m7d as u8;
+        Y = cd_pos + 3; hdma_cd[Y] = (m7d >> 8) as u8;
+        cd_pos = cd_pos + 4;
+
+        // Advance ZR for next scanline
+        zr = zr + pv_zr_step;
+        scanline++;
+    }
+
+    // Terminators
+    Y = ab_pos; hdma_ab[Y] = 0;
+    Y = cd_pos; hdma_cd[Y] = 0;
+}
+
+// ============================================================================
+// SET MODE 7 ORIGIN
+// ============================================================================
+
+// After pv_rebuild, set the M7 scroll/center registers based on
+// camera position and the perspective HDMA table at the focus scanline.
+//
+// The SNES Mode 7 formula: Tx = A*(Sx+Ox-Px) + B*(Sy+Oy-Py) + Px
+// We need to set Ox (M7HOFS), Oy (M7VOFS), Px (M7X), Py (M7Y) so that
+// the camera's world position appears at the focus point on screen.
+fn pv_set_origin() {
+    // Simple scroll: center the view on the camera position
+    // M7X/M7Y = camera position (pivot point)
+    nmi_m7x = posx_int;
+    nmi_m7y = posy_int;
+    // Scroll offset: pivot minus screen center
+    nmi_hofs = posx_int - 128;
+    nmi_vofs = posy_int - 112;
+
+    // Store M7 matrix for NMI (used for initial register write)
+    X = angle & 0xFF;
+    let cos_val: i16 = COS_TABLE[X];
+    nmi_m7a = cos_val as u16;
+    nmi_m7d = cos_val as u16;
+    X = (angle + 192) & 0xFF;
+    let sin_val: i16 = COS_TABLE[X];
+    nmi_m7b = sin_val as u16;
+    nmi_m7c = (0 - sin_val) as u16;
+
+    // Sky BG2 scroll: horizontal parallax from angle, vertical to meet horizon
+    nmi_bg2h = (0 - (angle << 2)) & 0x03FF;
+    nmi_bg2v = 240 - (horizon_line as u16);
+}
+
+// ============================================================================
+// INPUT HANDLING
+// ============================================================================
+
+fn read_input() {
+    wait_autojoy();
+    pad_prev = pad;
+    pad = (JOY1H as u16) << 8 | (JOY1L as u16);
+
+    // Rotation: Left/Right on D-pad
+    if pad & Joy::Left as u16 != 0 {
+        angle = angle - ROTATE_SPEED;
+    }
+    if pad & Joy::Right as u16 != 0 {
+        angle = angle + ROTATE_SPEED;
+    }
+
+    // Movement: Up/Down moves in facing direction
+    // MOVE_SPEED=3: multiply by 3 via (val * 2 + val) since * requires power-of-2
+    if pad & Joy::Up as u16 != 0 {
+        // Forward: add sin to X, add cos to Y
+        X = (angle + 192) & 0xFF;
+        let move_sin: i16 = COS_TABLE[X];
+        X = angle & 0xFF;
+        let move_cos: i16 = COS_TABLE[X];
+
+        // sin * 3 >> 8 = (sin + sin + sin) >> 8
+        let dx: i16 = (move_sin + move_sin + move_sin) >> 8;
+        let dy: i16 = (move_cos + move_cos + move_cos) >> 8;
+        add_to_posx(0 - dx);
+        add_to_posy(0 - dy);
+    }
+    if pad & Joy::Down as u16 != 0 {
+        X = (angle + 192) & 0xFF;
+        let move_sin: i16 = COS_TABLE[X];
+        X = angle & 0xFF;
+        let move_cos: i16 = COS_TABLE[X];
+
+        let dx: i16 = (move_sin + move_sin + move_sin) >> 8;
+        let dy: i16 = (move_cos + move_cos + move_cos) >> 8;
+        add_to_posx(dx);
+        add_to_posy(dy);
+    }
+
+    // Height: L/R shoulder buttons
+    if pad & Joy::L as u16 != 0 {
+        if height > HEIGHT_BASE {
+            height = height - HEIGHT_SPEED;
+        }
+    }
+    if pad & Joy::R as u16 != 0 {
+        if height < HEIGHT_MAX {
+            height = height + HEIGHT_SPEED;
+        }
+    }
+
+    // Select: reset position
+    if pad & Joy::Select as u16 != 0 {
+        posx_frac = 0;
+        posx_int = 512;
+        posy_frac = 0;
+        posy_int = 512;
+        angle = 0;
+        height = HEIGHT_INIT;
+    }
+}
+
+// ============================================================================
+// HDMA SETUP
+// ============================================================================
+
+fn setup_hdma(buf_idx: u8) {
+    // Channel 0: BGMODE ($2105) — 1 register, 1 byte
+    DMAP0 = 0x00;
+    BBAD0 = 0x05;
+    dma_set_src!(0, hdma_bgmode);
+    // Adjust source to correct buffer
+    if buf_idx != 0 {
+        A1T0 = A1T0 + 240;
+    }
+
+    // Channel 1: TM ($212C) — 1 register, 1 byte
+    DMAP1 = 0x00;
+    BBAD1 = 0x2C;
+    dma_set_src!(1, hdma_tm);
+    if buf_idx != 0 {
+        A1T1 = A1T1 + 240;
+    }
+
+    // Channel 2: M7A+M7B ($211B) — 2 registers, 2 bytes each = mode $03
+    DMAP2 = 0x03;
+    BBAD2 = 0x1B;
+    dma_set_src!(2, hdma_ab);
+    if buf_idx != 0 {
+        A1T2 = A1T2 + 1024;
+    }
+
+    // Channel 3: M7C+M7D ($211D) — 2 registers, 2 bytes each = mode $03
+    DMAP3 = 0x03;
+    BBAD3 = 0x1D;
+    dma_set_src!(3, hdma_cd);
+    if buf_idx != 0 {
+        A1T3 = A1T3 + 1024;
+    }
+
+    // Channel 4: COLDATA ($2132) — 1 register, 1 byte
+    DMAP4 = 0x00;
+    BBAD4 = 0x32;
+    dma_set_src!(4, hdma_fade);
+    if buf_idx != 0 {
+        A1T4 = A1T4 + 240;
+    }
+}
+
+// ============================================================================
+// NMI HANDLER
+// ============================================================================
+
+// HDMA channel config buffer — 128 bytes (8 channels × 16 bytes)
+// Prepared by main loop, copied to $4300-$437F by NMI every frame
+#[lowram]
+static mut nmi_hdma: [u8; 128];
+
+#[zeropage]
+static mut nmi_hdma_en: u8;
+
+#[interrupt(nmi)]
+fn nmi_handler() {
+    clear_nmi!();
+
+    // HDMA setup FIRST — must complete before VBlank ends
+    // Copy HDMA config buffer to hardware $4300-$437F
+    asm!("REP #$30", ".ACCU 16", ".INDEX 16",
+         "PHB",
+         "LDX #nmi_hdma",
+         "LDY #$4300",
+         "LDA #127",
+         "MVN $00,$00",
+         "PLB",
+         "SEP #$20", ".ACCU 8");
+    HDMAEN = nmi_hdma_en;
+
+    // Write M7 matrix
+    set_m7a!(nmi_m7a);
+    set_m7b!(nmi_m7b);
+    set_m7c!(nmi_m7c);
+    set_m7d!(nmi_m7d);
+    set_m7_center!(nmi_m7x, nmi_m7y);
+
+    // M7 scroll
+    A = nmi_hofs as u16;
+    BG1HOFS = A as u8;
+    BG1HOFS = B;
+    A = nmi_vofs as u16;
+    BG1VOFS = A as u8;
+    BG1VOFS = B;
+
+    // Sky scroll
+    set_bg2_hscroll!(nmi_bg2h);
+    set_bg2_vscroll!(nmi_bg2v);
+
+    // TM
+    TM = 0x12;   // Default BG2+OBJ for sky; HDMA switches for ground
+
+    // Display on
+    INIDISP = 0x0F;
+
+    // HDMA already set up at top of NMI
+}
+
+// ============================================================================
+// ENTRY POINT
+// ============================================================================
+
+#[entry]
+fn main() -> ! {
+    snes_init();
+    INIDISP = FORCE_BLANK;
+    NMITIMEN = 0;
+
+    // Initialize state
+    angle = 0;
+    height = HEIGHT_INIT;
+    posx_frac = 0;
+    posx_int = 512;   // Center of 1024-unit map
+    posy_frac = 0;
+    posy_int = 512;
+    nmi_ready = 0;
+    nmi_count = 0;
+    pv_buffer = 0;
+    pad = 0;
+    pad_prev = 0;
+
+    // Upload all graphics data
+    upload_mode7_data();
+    upload_sky_data();
+    upload_sprite_data();
+    upload_palettes();
+
+    // Initialize OAM
+    oam_init();
+
+    // Configure PPU for initial state
+    // BG2 = sky (Mode 1), BG1 = ground (Mode 7, via HDMA)
+    // Start in Mode 1 for the sky portion
+    set_bgmode!(BG::Mode1, 0);
+
+    // BG2 chr at VRAM word $6000 => $6000/$1000 = 6
+    set_bg12_chr!(0, 6);
+
+    // BG2 tilemap at VRAM word $6C00 => $6C00/$400 = $1B
+    set_bg2_map!(0x1B, 0);
+
+    // M7SEL: wrap tilemap
+    M7SEL = 0x00;
+
+    // OBJ: sprites at VRAM word $4000 => $4000/$2000 = base 2
+    set_obj_sel!(ObjSize::T16x16_32x32, 2, 0);
+
+    // Main screen: will be set by HDMA per scanline
+    set_main_layers!(Screen::BG2 | Screen::Obj);
+
+    // Set backdrop to sky blue
+    CGADD = 0;
+    CGDATA = 0xF1;
+    CGDATA = 0x76;
+
+    // M7SEL wrap
+    M7SEL = 0x00;
+
+    // Initial M7 identity matrix
+    nmi_m7a = 0x0100;
+    nmi_m7b = 0x0000;
+    nmi_m7c = 0x0000;
+    nmi_m7d = 0x0100;
+    nmi_m7x = 512;
+    nmi_m7y = 512;
+    nmi_hofs = 512 - 128;
+    nmi_vofs = 512 - 112;
+
+    // Sky scroll
+    nmi_bg2h = 0;
+    nmi_bg2v = 160;
+
+    // Clear nmi_hdma buffer (128 bytes)
+    Y = 0;
+    while Y < 128 {
+        nmi_hdma[Y] = 0;
+        Y++;
+    }
+
+    // Write HDMA BGMODE table to $7E WRAM
+    // Format: [count, data_byte] per block. Count = lines, 1 data byte transferred
+    // on the first scanline, value held for `count` lines.
+    Y = 0;
+    hdma_bgmode[Y] = 108; Y++;   // 108 lines
+    hdma_bgmode[Y] = 0x01; Y++;  // Mode 1
+    hdma_bgmode[Y] = 116; Y++;   // 116 lines
+    hdma_bgmode[Y] = 0x07; Y++;  // Mode 7
+    hdma_bgmode[Y] = 0x00;       // terminator
+
+    // Write HDMA TM table
+    Y = 0;
+    hdma_tm[Y] = 108; Y++;
+    hdma_tm[Y] = 0x12; Y++;      // BG2+OBJ
+    hdma_tm[Y] = 116; Y++;
+    hdma_tm[Y] = 0x11; Y++;      // BG1+OBJ
+    hdma_tm[Y] = 0x00;
+
+    // Prepare nmi_hdma buffer: HDMA channel config pointing to $7E WRAM tables
+    // Channel 0: BGMODE
+    Y = 0;  nmi_hdma[Y] = 0x00;  // DMAP0: direct, 1 reg
+    Y = 1;  nmi_hdma[Y] = 0x05;  // BBAD0: $2105
+    // A1T0 = hdma_bgmode address, A1B0 = $7E
+    dma_set_src!(0, hdma_bgmode);   // sets A1T0L/H and A1B0 in hardware
+    // Copy hardware register values to the nmi_hdma buffer
+    Y = 2;  nmi_hdma[Y] = A1T0L;
+    Y = 3;  nmi_hdma[Y] = A1T0H;
+    Y = 4;  nmi_hdma[Y] = A1B0;
+
+    // Channel 1: TM
+    Y = 16; nmi_hdma[Y] = 0x00;  // DMAP1
+    Y = 17; nmi_hdma[Y] = 0x2C;  // BBAD1: $212C
+    dma_set_src!(1, hdma_tm);
+    Y = 18; nmi_hdma[Y] = A1T1L;
+    Y = 19; nmi_hdma[Y] = A1T1H;
+    Y = 20; nmi_hdma[Y] = A1B1;
+
+    // Enable channels 0+1
+    nmi_hdma_en = 0x03;
+
+    angle = 0;
+
+    // Display on, NMI enabled
+    set_brightness!(15);
+    NMITIMEN = Interrupt::Nmi | Interrupt::AutoJoy;
+
+    // Wait for first NMI to apply HDMA
+    wait_nmi();
+
+    loop {
+        wait_nmi();
+        wait_autojoy();
+        pad = (JOY1H as u16) << 8 | (JOY1L as u16);
+
+        if pad & Joy::Left as u16 != 0 {
+            angle = angle + 2;
+        }
+        if pad & Joy::Right as u16 != 0 {
+            angle = angle - 2;
+        }
+
+        // Update M7 matrix from angle
+        X = angle & 0xFF;
+        let cos_val: i16 = COS_TABLE[X];
+        X = (angle + 192) & 0xFF;
+        let sin_val: i16 = COS_TABLE[X];
+
+        nmi_m7a = cos_val as u16;
+        nmi_m7d = cos_val as u16;
+        nmi_m7b = sin_val as u16;
+        nmi_m7c = (0 - sin_val) as u16;
+
+        // Sky parallax
+        nmi_bg2h = angle << 1;
+    }
+}
+
+// ============================================================================
+// ASSET DATA
+// ============================================================================
+
+// HDMA BGMODE table in ROM: Mode 1 for 108 lines, Mode 7 for 116 lines
+static HDMA_BGMODE_ROM: [u8; 5] = [0xEC, 0x01, 0xF4, 0x07, 0x00];
+
+// HDMA TM table in ROM: BG2+OBJ for 108 lines (sky), BG1+OBJ for 116 lines (ground)
+static HDMA_TM_ROM: [u8; 5] = [0xEC, 0x12, 0xF4, 0x11, 0x00];
+
+// Mode 7 interleaved tilemap+chr (32768 bytes)
+#[bank(1)]
+static BG_MD7_DATA = include_bytes!("../assets/bg.md7");
+
+// Sky background
+static SKY_CHR_DATA = include_bytes!("../assets/sky.chr");
+static SKY_NMT_DATA = include_bytes!("../assets/sky.nmt");
+
+// Sprite character data
+static FG_CHR_DATA = include_bytes!("../assets/fg.chr");
+
+// Palettes
+static BG_PAL_DATA = include_bytes!("../assets/bg.pal");
+static FG_PAL_DATA = include_bytes!("../assets/fg.pal");
