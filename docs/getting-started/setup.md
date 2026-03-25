@@ -1,4 +1,4 @@
-# Installation
+# Setup
 
 This guide covers installing the R65 compiler toolchain and creating your first SNES project.
 

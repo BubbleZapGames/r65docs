@@ -1,6 +1,6 @@
 ---
 sidebar_position: 1
-title: Language Overview
+title: Overview
 description: A comprehensive overview of the R65 programming language for the 65816 processor.
 ---
 

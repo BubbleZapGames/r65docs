@@ -100,6 +100,10 @@ fn readInput() {
 fn nmi_handler() {
     // DMA OAM buffer to PPU during VBlank
     dma_copy_oam_const!(7, oam_buffer, 544);
+
+    // Read input
+    readInput();
+
     clear_nmi!();
 }
 
@@ -125,9 +129,6 @@ fn main() -> ! {
         // Update scroll registers (must be during VBlank)
         set_bg1_hscroll!(scroll_x);
         set_bg1_vscroll!(scroll_y);
-
-        // Read input
-        readInput();
 
         // Update OAM buffer (writes to RAM, no VBlank constraint)
         console.print_at!(0, 0, "X:{u16:04d}", scroll_x);
