@@ -51,6 +51,10 @@ const config = {
       },
       navbar: {
         title: 'R65',
+        logo: {
+          alt: 'R65 Logo',
+          src: 'img/logo-navbar.png',
+        },
         items: [
           {
             type: 'docSidebar',
