@@ -93,6 +93,17 @@
       ]
     },
     {
+      "name": "Games",
+      "examples": [
+        {
+          "id": "snake",
+          "name": "Snake",
+          "description": "Classic snake game with BG tilemap rendering, palette cycling, and collision detection",
+          "file": "games/snake.r65"
+        }
+      ]
+    },
+    {
       "name": "Hardware",
       "examples": [
         {

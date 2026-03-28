@@ -1,0 +1,460 @@
+// snake - Classic Snake Game for SNES
+// D-pad controls direction, eat food to grow, avoid walls and yourself
+// BG1 = background (tile 7), BG2 = game layer (snake, food, stone border)
+// Uses Mode 1 (4bpp) to match tile asset format
+
+#[snesrom(name="SNAKE")]
+#[bank(0)]
+
+include!("sneslib.r65")
+include!("rand.r65")
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+// Tile indices (8 tiles in snake.chr, 4bpp 8x8)
+const TILE_HEAD_V: u8 = 0;    // Vertical head pointing up
+const TILE_HEAD_H: u8 = 1;    // Horizontal head pointing left
+const TILE_BODY_V: u8 = 2;    // Vertical body
+const TILE_BODY_H: u8 = 3;    // Horizontal body
+const TILE_CORNER: u8 = 4;    // Corner elbow (connects bottom + right edges)
+const TILE_FOOD: u8 = 5;      // Food ball
+const TILE_WALL: u8 = 6;      // Stone boundary
+const TILE_BG: u8 = 7;        // Background pattern
+const TILE_EMPTY: u8 = 8;     // Transparent (zeroed VRAM past tile data)
+
+// Tilemap attribute bits (high byte of 16-bit tilemap entry)
+const FLIP_H: u8 = 0x40;
+const FLIP_V: u8 = 0x80;
+const FLIP_HV: u8 = 0xC0;
+const BG2_PRI: u8 = 0x20;     // Priority 1: BG2 tiles render in front of BG1
+
+// VRAM word addresses
+const VRAM_TILES: u16 = 0x0000;
+const VRAM_MAP1: u16 = 0x7000;    // BG1 tilemap
+const VRAM_MAP2: u16 = 0x7400;    // BG2 tilemap
+
+// Play field inside 1-tile stone border (32x28 visible screen)
+const FIELD_X1: u8 = 1;
+const FIELD_Y1: u8 = 1;
+const FIELD_X2: u8 = 30;
+const FIELD_Y2: u8 = 26;
+
+// Directions (opposites XOR to 1: Up^Down=1, Left^Right=1)
+enum Dir { Up = 0, Down = 1, Left = 2, Right = 3 }
+
+// Game tuning
+const INITIAL_LEN: u8 = 4;
+const INITIAL_SPEED: u8 = 10;     // Frames per move (lower = faster)
+const MIN_SPEED: u8 = 3;
+const START_X: u8 = 16;
+const START_Y: u8 = 14;
+
+// ============================================================================
+// LOOKUP TABLES
+// ============================================================================
+
+// Palette attribute for body color cycling (palettes 0-3)
+// High byte bits 2-4 select palette: 0=$00, 1=$04, 2=$08, 3=$0C
+static PAL_ATTR: [u8; 4] = [0x00, 0x04, 0x08, 0x0C];
+
+// Head tile and flip per direction [Up, Down, Left, Right]
+static HEAD_TILE: [u8; 4] = [TILE_HEAD_V, TILE_HEAD_V, TILE_HEAD_H, TILE_HEAD_H];
+static HEAD_FLIP: [u8; 4] = [0, FLIP_V, 0, FLIP_H];
+
+// Body segment tile lookup indexed by (entry_dir * 4 + exit_dir)
+// entry_dir = direction of travel when entering cell
+// exit_dir  = direction of travel when leaving cell toward head
+//
+// Tile 4 unflipped connects bottom + right edges (curve in top-left corner):
+//   No flip   = bottom + right  (Entry UP+Exit RIGHT, Entry LEFT+Exit DOWN)
+//   H-flip    = bottom + left   (Entry UP+Exit LEFT,  Entry RIGHT+Exit DOWN)
+//   V-flip    = top + right     (Entry DOWN+Exit RIGHT, Entry LEFT+Exit UP)
+//   HV-flip   = top + left      (Entry DOWN+Exit LEFT, Entry RIGHT+Exit UP)
+
+static BODY_TILE: [u8; 16] = [
+//  exit: Up         Down         Left         Right
+    TILE_BODY_V,     0,           TILE_CORNER, TILE_CORNER,  // entry Up
+    0,               TILE_BODY_V, TILE_CORNER, TILE_CORNER,  // entry Down
+    TILE_CORNER,     TILE_CORNER, TILE_BODY_H, 0,            // entry Left
+    TILE_CORNER,     TILE_CORNER, 0,           TILE_BODY_H   // entry Right
+];
+
+static BODY_FLIP: [u8; 16] = [
+//  exit: Up     Down     Left     Right
+    0x00,        0x00,    FLIP_H,  0x00,     // entry Up
+    0x00,        0x00,    FLIP_HV, FLIP_V,   // entry Down
+    FLIP_V,      0x00,    0x00,    0x00,     // entry Left
+    FLIP_HV,     FLIP_H,  0x00,    0x00      // entry Right
+];
+
+// ============================================================================
+// RAM VARIABLES
+// ============================================================================
+
+// Snake ring buffer (u8 index wraps naturally at 256)
+#[lowram]
+static mut snake_x: [u8; 256];
+#[lowram]
+static mut snake_y: [u8; 256];
+#[lowram]
+static mut snake_dir: [u8; 256];
+
+// Game state
+#[lowram]
+static mut snake_head: u8;
+#[lowram]
+static mut snake_len: u8;
+#[lowram]
+static mut direction: u8;
+#[lowram]
+static mut next_dir: u8;
+#[lowram]
+static mut food_x: u8;
+#[lowram]
+static mut food_y: u8;
+#[lowram]
+static mut move_timer: u8;
+#[lowram]
+static mut move_speed: u8;
+#[lowram]
+static mut game_over: u8;
+#[lowram]
+static mut controller1: u16;
+
+// ============================================================================
+// VRAM TILE WRITE
+// ============================================================================
+
+fn setTileBG2(tx: u8, ty: u8, tile: u8, attr: u8) {
+    VMAIN = VmainTrigger::High;
+    let addr: u16 = VRAM_MAP2 + (ty as u16) * 32 + (tx as u16);
+    set_vram_addr!(addr);
+    VMDATAL = tile;
+    VMDATAH = attr;
+}
+
+// ============================================================================
+// COLLISION HELPERS
+// ============================================================================
+
+// Check if any snake segment is at (cx, cy)
+// exclude_tail: 1 = skip tail segment (it will move away)
+fn isOnSnake(cx: u8, cy: u8, exclude_tail: u8) -> u8 {
+    let check_len: u8 = snake_len;
+    if exclude_tail != 0 {
+        check_len = snake_len - 1;
+    }
+
+    let i: u8 = 0;
+    while i < check_len {
+        let idx: u8 = snake_head - i;
+        if snake_x[idx] == cx && snake_y[idx] == cy {
+            return 1;
+        }
+        i++;
+    }
+    return 0;
+}
+
+// ============================================================================
+// FOOD PLACEMENT
+// ============================================================================
+
+fn placeFood() {
+    let placed: u8 = 0;
+    while placed == 0 {
+        let r: u16 = rand();
+        let fx: u8 = (r as u8) & 0x1F;
+        let fy: u8 = ((r >> 8) as u8) & 0x1F;
+
+        if fx >= FIELD_X1 && fx <= FIELD_X2 && fy >= FIELD_Y1 && fy <= FIELD_Y2 {
+            if isOnSnake(fx, fy, 0) == 0 {
+                food_x = fx;
+                food_y = fy;
+                placed = 1;
+            }
+        }
+    }
+
+    setTileBG2(food_x, food_y, TILE_FOOD, BG2_PRI);
+}
+
+// ============================================================================
+// GRAPHICS SETUP
+// ============================================================================
+
+fn uploadGraphics() {
+    dma_copy_vram_const!(0, CHR_DATA, VRAM_TILES, CHR_DATA.len());
+    dma_copy_cgram_const!(1, PAL_DATA, 0, PAL_DATA.len() / 2);
+
+    // Write primary colors at color 15 of palettes 0-3 for body cycling
+    // BGR555 format: bbbbb_ggggg_rrrrr
+    CGADD = 15;       // Palette 0 color 15: Red
+    CGDATA = 0x1F;
+    CGDATA = 0x00;
+    CGADD = 31;       // Palette 1 color 15: Green
+    CGDATA = 0xE0;
+    CGDATA = 0x03;
+    CGADD = 47;       // Palette 2 color 15: Blue
+    CGDATA = 0x00;
+    CGDATA = 0x7C;
+    CGADD = 63;       // Palette 3 color 15: Yellow
+    CGDATA = 0xFF;
+    CGDATA = 0x03;
+}
+
+// Fill entire BG1 tilemap with background tile
+fn initBG1() {
+    VMAIN = VmainTrigger::High;
+    set_vram_addr!(VRAM_MAP1);
+    let i: u16 = 0;
+    while i < 1024 {
+        VMDATAL = TILE_BG;
+        VMDATAH = 0x00;
+        i++;
+    }
+}
+
+// Draw stone border on BG2, clear interior
+fn initBG2() {
+    VMAIN = VmainTrigger::High;
+    set_vram_addr!(VRAM_MAP2);
+    let y: u16 = 0;
+    while y < 32 {
+        let x: u16 = 0;
+        while x < 32 {
+            if y < 28 && (y == 0 || y == 27 || x == 0 || x == 31) {
+                VMDATAL = TILE_WALL;
+                VMDATAH = BG2_PRI;
+            } else {
+                VMDATAL = TILE_EMPTY;
+                VMDATAH = 0x00;
+            }
+            x++;
+        }
+        y++;
+    }
+}
+
+// ============================================================================
+// GAME STATE INITIALIZATION
+// ============================================================================
+
+fn initGame() {
+    game_over = 0;
+    move_speed = INITIAL_SPEED;
+    move_timer = move_speed;
+    direction = Dir::Right;
+    next_dir = Dir::Right;
+    snake_len = INITIAL_LEN;
+    snake_head = INITIAL_LEN - 1;
+
+    // Build initial snake body going right
+    let i: u8 = 0;
+    while i < INITIAL_LEN {
+        snake_x[i] = START_X - INITIAL_LEN + 1 + i;
+        snake_y[i] = START_Y;
+        snake_dir[i] = Dir::Right;
+        i++;
+    }
+
+    // Redraw BG2 (border + empty interior)
+    initBG2();
+
+    // Draw tail (reversed head pointing opposite to entry direction)
+    let tail_opp: u8 = snake_dir[0] ^ 1;
+    setTileBG2(snake_x[0], snake_y[0],
+               HEAD_TILE[tail_opp], HEAD_FLIP[tail_opp] | BG2_PRI | PAL_ATTR[0 & 3]);
+
+    // Draw body segments (between tail and head)
+    let j: u8 = 1;
+    while j < INITIAL_LEN - 1 {
+        setTileBG2(snake_x[j], snake_y[j], TILE_BODY_H, BG2_PRI | PAL_ATTR[j & 3]);
+        j++;
+    }
+
+    // Draw head
+    setTileBG2(snake_x[snake_head], snake_y[snake_head],
+               HEAD_TILE[Dir::Right as u8], HEAD_FLIP[Dir::Right as u8] | BG2_PRI);
+
+    placeFood();
+}
+
+// ============================================================================
+// INPUT
+// ============================================================================
+
+fn handleInput() {
+    if controller1 & Joy::Up as u16 != 0 {
+        if direction != Dir::Down {
+            next_dir = Dir::Up;
+        }
+    } else if controller1 & Joy::Down as u16 != 0 {
+        if direction != Dir::Up {
+            next_dir = Dir::Down;
+        }
+    } else if controller1 & Joy::Left as u16 != 0 {
+        if direction != Dir::Right {
+            next_dir = Dir::Left;
+        }
+    } else if controller1 & Joy::Right as u16 != 0 {
+        if direction != Dir::Left {
+            next_dir = Dir::Right;
+        }
+    }
+}
+
+// ============================================================================
+// SNAKE MOVEMENT (called once per move tick)
+// ============================================================================
+
+fn moveSnake() {
+    direction = next_dir;
+
+    // Compute new head position
+    let sx: u8 = snake_x[snake_head];
+    let sy: u8 = snake_y[snake_head];
+    let new_x: u8 = sx;
+    let new_y: u8 = sy;
+
+    if direction == Dir::Up {
+        new_y = sy - 1;
+    } else if direction == Dir::Down {
+        new_y = sy + 1;
+    } else if direction == Dir::Left {
+        new_x = sx - 1;
+    } else {
+        new_x = sx + 1;
+    }
+
+    // Wall collision
+    if new_x < FIELD_X1 || new_x > FIELD_X2 || new_y < FIELD_Y1 || new_y > FIELD_Y2 {
+        game_over = 1;
+        return;
+    }
+
+    // Check food
+    let eating: u8 = 0;
+    if new_x == food_x && new_y == food_y {
+        eating = 1;
+    }
+
+    // Can we actually grow? (cap at 255 for u8 ring buffer)
+    let growing: u8 = 0;
+    if eating != 0 && snake_len < 255 {
+        growing = 1;
+    }
+
+    // Self collision (exclude tail if it will move away)
+    if isOnSnake(new_x, new_y, 1 - growing) != 0 {
+        game_over = 1;
+        return;
+    }
+
+    // --- Commit the move ---
+
+    // Erase old tail and redraw new tail unless growing
+    if growing == 0 {
+        let tail_idx: u8 = snake_head - snake_len + 1;
+        setTileBG2(snake_x[tail_idx], snake_y[tail_idx], TILE_EMPTY, 0x00);
+        // New tail is the next segment; draw as reversed head
+        // Use exit direction (toward head) to orient the tail correctly at corners
+        let new_tail: u8 = tail_idx + 1;
+        let tail_opp: u8 = snake_dir[new_tail + 1] ^ 1;
+        setTileBG2(snake_x[new_tail], snake_y[new_tail],
+                   HEAD_TILE[tail_opp], HEAD_FLIP[tail_opp] | BG2_PRI | PAL_ATTR[new_tail & 3]);
+    }
+
+    // Convert old head to body/corner tile
+    let old_head: u8 = snake_head;
+    let entry: u8 = snake_dir[old_head];
+    let lookup: u8 = entry * 4 + direction;
+    setTileBG2(snake_x[old_head], snake_y[old_head],
+               BODY_TILE[lookup], BODY_FLIP[lookup] | BG2_PRI | PAL_ATTR[old_head & 3]);
+
+    // Advance ring buffer
+    snake_head = snake_head + 1;
+    snake_x[snake_head] = new_x;
+    snake_y[snake_head] = new_y;
+    snake_dir[snake_head] = direction;
+
+    // Draw new head
+    setTileBG2(new_x, new_y, HEAD_TILE[direction], HEAD_FLIP[direction] | BG2_PRI);
+
+    // Handle food consumption
+    if eating != 0 {
+        if growing != 0 {
+            snake_len = snake_len + 1;
+        }
+        if move_speed > MIN_SPEED {
+            move_speed = move_speed - 1;
+        }
+        placeFood();
+    }
+}
+
+// ============================================================================
+// NMI HANDLER
+// ============================================================================
+
+#[interrupt(nmi)]
+fn nmi_handler() {
+    wait_autojoy();
+    controller1 = (JOY1H as u16) << 8 | (JOY1L as u16);
+    clear_nmi!();
+}
+
+// ============================================================================
+// ENTRY POINT
+// ============================================================================
+
+#[entry]
+fn main() -> ! {
+    snes_init();
+    INIDISP = FORCE_BLANK;
+    NMITIMEN = 0;
+
+    uploadGraphics();
+    initBG1();
+
+    // Mode 1: BG1/BG2 are 4bpp (matches snake.chr tile format)
+    set_bgmode!(BG::Mode1, 0);
+    set_bg1_map!(0x1C, 0);       // BG1 tilemap at VRAM $7000
+    set_bg2_map!(0x1D, 0);       // BG2 tilemap at VRAM $7400
+    set_bg12_chr!(0, 0);         // Both BGs share tiles at VRAM $0000
+
+    set_main_layers!(Screen::BG1 | Screen::BG2);
+
+    rand_update!(0x0FFE);
+    initGame();
+
+    set_brightness!(15);
+    NMITIMEN = Interrupt::Nmi | Interrupt::AutoJoy;
+
+    loop {
+        wait_nmi();
+
+        handleInput();
+
+        move_timer = move_timer - 1;
+        if move_timer == 0 {
+            move_timer = move_speed;
+            moveSnake();
+            if game_over != 0 {
+                INIDISP = FORCE_BLANK;
+                initGame();
+                INIDISP = 0x0F;
+            }
+        }
+    }
+}
+
+// ============================================================================
+// ROM DATA
+// ============================================================================
+
+#[bank(1)]
+static CHR_DATA = include_bytes!("../assets/snake.chr");
+static PAL_DATA = include_bytes!("../assets/snake.pal");
