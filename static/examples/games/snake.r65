@@ -94,11 +94,11 @@ static BODY_FLIP: [u8; 16] = [
 // ============================================================================
 
 // Snake ring buffer (u8 index wraps naturally at 256)
-#[lowram]
+#[ram]
 static mut snake_x: [u8; 256];
-#[lowram]
+#[ram]
 static mut snake_y: [u8; 256];
-#[lowram]
+#[ram]
 static mut snake_dir: [u8; 256];
 
 // Game state
