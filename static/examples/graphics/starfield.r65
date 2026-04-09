@@ -113,23 +113,23 @@ fn uploadStarPalette() {
 // ============================================================================
 
 fn updateStars() {
-    let i: u16 = 0;
+    let mut i: u16 = 0;
     while i < NUM_STARS as u16 {
         // Velocity index: i / 4
         let vi: u16 = i >> 2;
 
         // Accelerate: exponential growth + base velocity
-        let ox: u16 = star_ox[i];
-        let oy: u16 = star_oy[i];
+        let mut ox: u16 = star_ox[i];
+        let mut oy: u16 = star_oy[i];
         ox = ox + (ox >> 4) + VEL_X[vi];
         oy = oy + (oy >> 4) + VEL_Y[vi];
 
         // Integer distance from center
-        let dist_x: u8 = (ox >> 8) as u8;
-        let dist_y: u8 = (oy >> 8) as u8;
+        let mut dist_x: u8 = (ox >> 8) as u8;
+        let mut dist_y: u8 = (oy >> 8) as u8;
 
         // Respawn at center if off-screen
-        let respawn: u8 = 0;
+        let mut respawn: u8 = 0;
         if dist_x >= 128 { respawn = 1; }
         if dist_y >= 112 { respawn = 1; }
         if respawn != 0 {
@@ -146,21 +146,21 @@ fn updateStars() {
         star_oy[i] = oy;
 
         // Screen position from direction lookup tables
-        let sx: u8 = CENTER_X + dist_x;
+        let mut sx: u8 = CENTER_X + dist_x;
         if X_NEG[i] != 0 {
             sx = CENTER_X - dist_x;
         }
 
         // Apply per-star vertical spawn offset (0-7 maps to -4..+3)
         let cy: u8 = CENTER_Y - 4 + star_y_off[i];
-        let sy: u8 = cy + dist_y;
+        let mut sy: u8 = cy + dist_y;
         if Y_NEG[i] != 0 {
             sy = cy - dist_y;
         }
 
         // Tile based on combined distance from center (Manhattan)
         let combined: u16 = dist_x as u16 + dist_y as u16;
-        let tile: u8 = 0;
+        let mut tile: u8 = 0;
         if combined >= DIST_MED as u16 { tile = 1; }
         if combined >= DIST_BRIGHT as u16 { tile = 2; }
 
@@ -176,7 +176,7 @@ fn updateStars() {
 
 fn initStars() {
     spawn_idx = 0;
-    let i: u16 = 0;
+    let mut i: u16 = 0;
     while i < NUM_STARS as u16 {
         star_ox[i] = INIT_OFF[i];
         star_oy[i] = INIT_OFF[i];

@@ -64,12 +64,12 @@ fn uploadMode7Vram() {
     set_vram_addr!(0x0000);
 
     // The .map file has 256-byte row stride; Mode 7 tilemap is 128 columns.
-    let map_offset: u16 = 0;
-    let chr_idx: u16 = 0;
-    let row: u16 = 0;
+    let mut map_offset: u16 = 0;
+    let mut chr_idx: u16 = 0;
+    let mut row: u16 = 0;
 
     while row < 128 {
-        let col: u16 = 0;
+        let mut col: u16 = 0;
         while col < 128 {
             Y = map_offset + col;
             VMDATAL = M7_MAP_DATA[Y];
@@ -102,7 +102,7 @@ fn buildMatrixTables() {
     let nsin_lo: u8 = (neg_sin as u16) as u8;
     let nsin_hi: u8 = ((neg_sin as u16) >> 8) as u8;
 
-    let pos: u16 = 0;
+    let mut pos: u16 = 0;
 
     // First chunk: 127 scanlines, continuous mode
     Y = pos;
@@ -110,7 +110,7 @@ fn buildMatrixTables() {
     HDMA_CD[Y] = 0xFF;
     pos++;
 
-    let scanline: u16 = 0;
+    let mut scanline: u16 = 0;
     while scanline < 224 {
         if scanline == 127 {
             Y = pos;
@@ -237,22 +237,22 @@ fn main() -> ! {
     // xba puts integer in A low byte; sign-extend for M7HOFS/M7VOFS high byte
     A = CAMERA_X as u16;
     xba();
-    let scroll_x: u8 = A;
+    let mut scroll_x: u8 = A;
     BG1HOFS = A;
     if A & 0x80 != 0 { A = 0xFF; } else { A = 0; }
     BG1HOFS = A;
 
     A = CAMERA_Y as u16;
     xba();
-    let scroll_y: u8 = A;
+    let mut scroll_y: u8 = A;
     BG1VOFS = A;
     if A & 0x80 != 0 { A = 0xFF; } else { A = 0; }
     BG1VOFS = A;
 
     // M7 center = scroll pixels + screen center
     // sign-extend scroll bytes to u16 for addition
-    let cx: u16 = (scroll_x as i8 as i16) as u16 + 128;
-    let cy: u16 = (scroll_y as i8 as i16) as u16 + 112;
+    let mut cx: u16 = (scroll_x as i8 as i16) as u16 + 128;
+    let mut cy: u16 = (scroll_y as i8 as i16) as u16 + 112;
     set_m7_center!(cx, cy);
 
     dma_set_hdma!(0x03);

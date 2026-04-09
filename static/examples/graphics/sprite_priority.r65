@@ -104,9 +104,9 @@ fn uploadBackground() {
     VMAIN = VmainTrigger::High;
     set_vram_addr!(VRAM_BG1_MAP);
 
-    let row: u16 = 0;
+    let mut row: u16 = 0;
     while row < 32 {
-        let col: u16 = 0;
+        let mut col: u16 = 0;
         while col < 32 {
             if row >= 8 && row < 20 && col >= 12 && col < 20 {
                 let tm_idx: u16 = (row - 8) * 8 + (col - 12);
@@ -145,12 +145,12 @@ fn updateSprites() {
         }
     }
 
-    let tile: u8 = TILE_FRAME0;
+    let mut tile: u8 = TILE_FRAME0;
     if anim_frame != 0 {
         tile = TILE_FRAME1;
     }
 
-    let i: u16 = 0;
+    let mut i: u16 = 0;
     while i < NUM_SPRITES as u16 {
         // Advance angle
         let ang: u8 = sprite_angle[i] + ORBIT_SPEED[i];
@@ -165,7 +165,7 @@ fn updateSprites() {
         let py: i16 = CENTER_Y as i16 - cy - 32;
 
         // Priority: top half of circle (cos > 0) = behind BG, bottom half = in front
-        let attr: u8 = OamPalette::Palette0 as u8;
+        let mut attr: u8 = OamPalette::Palette0 as u8;
         if cy > 0 {
             attr = attr | OamPriority::Behind as u8;
         } else {
@@ -188,7 +188,7 @@ fn updateSprites() {
 // ============================================================================
 
 fn initSprites() {
-    let i: u16 = 0;
+    let mut i: u16 = 0;
     while i < NUM_SPRITES as u16 {
         sprite_angle[i] = ANGLE_OFFSET[i];
         sprites[i].set!(0, 240, 0);  // off-screen
@@ -199,7 +199,7 @@ fn initSprites() {
 // Hide unused OAM entries (12-127) by setting Y off-screen
 fn hideUnusedSprites() {
     OAMADD = NUM_SPRITES as u16 * 2;
-    let i: u16 = NUM_SPRITES as u16;
+    let mut i: u16 = NUM_SPRITES as u16;
     while i < 128 {
         OAMDATA = 0;    // X
         OAMDATA = 240;  // Y off-screen
@@ -228,7 +228,7 @@ fn nmi_handler() {
     OAMDATA = 0x0A;  // sprites 0-1: large, 2-3: small
 
     // Remaining 31 bytes: all zero
-    let j: u16 = 0;
+    let mut j: u16 = 0;
     while j < 31 {
         OAMDATA = 0;
         j++;

@@ -33,7 +33,7 @@ const fn build_hdma_table() -> [u8; 451] {
 
         // Signed sine offset → 10-bit two's complement scroll value
         let offset: i16 = fixed_sin(scanline, 64, WAVE_AMPLITUDE);
-        let scroll: u16 = offset as u16;
+        let mut scroll: u16 = offset as u16;
 
         t[pos] = scroll as u8;           // Low byte
         t[pos + 1] = (scroll >> 8) as u8; // High byte
@@ -85,7 +85,7 @@ fn main() -> ! {
     setupBackground();
     setupHdma();
 
-    let scroll: u16 = 0;
+    let mut scroll: u16 = 0;
 
     dma_set_hdma!(0x01);
     INIDISP = 0x0F;

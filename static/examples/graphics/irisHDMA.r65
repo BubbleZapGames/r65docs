@@ -68,11 +68,11 @@ fn makeArc(height: u8, area: far *[u8; 224]) {
     // Quarter-circle using incremental arithmetic.
     // Track sum = x^2 + y^2 directly; compare against r^2.
     let r_sq: u16 = mul16(height, height as u16);
-    let cy: u8 = height;
-    let sum: u16 = r_sq;
-    let dx: u16 = 1;
-    let dy: u16 = height as u16 * 2 - 1;
-    let i: u16 = 0;
+    let mut cy: u8 = height;
+    let mut sum: u16 = r_sq;
+    let mut dx: u16 = 1;
+    let mut dy: u16 = height as u16 * 2 - 1;
+    let mut i: u16 = 0;
 
     while i < height as u16 + 1 {
         // Shrink cy until sum <= r_sq
@@ -100,14 +100,14 @@ fn makeArc(height: u8, area: far *[u8; 224]) {
 // Build HDMA table from ARC buffer for window masking.
 // HDMA format: mode $01 = write WH0 ($2126) and WH1 ($2127) per scanline.
 fn buildHdmaTable(radius: u16, x_offset: u8, y_offset: u8) {
-    let pos: u16 = 0;
+    let mut pos: u16 = 0;
 
     // First chunk header: 127 scanlines, continuous mode
     Y = pos;
     HDMA_TABLE[Y] = 0xFF;
     pos++;
 
-    let scanline: u16 = 0;
+    let mut scanline: u16 = 0;
     while scanline < SCREEN_HEIGHT {
         // Insert second chunk header at scanline 127
         if scanline == 127 {
@@ -116,15 +116,15 @@ fn buildHdmaTable(radius: u16, x_offset: u8, y_offset: u8) {
             pos++;
         }
 
-        let dist: u8;
+        let mut dist: u8;
         if scanline < y_offset as u16 {
             dist = y_offset - (scanline as u8);
         } else {
             dist = (scanline as u8) - y_offset;
         }
 
-        let left: u8;
-        let right: u8;
+        let mut left: u8;
+        let mut right: u8;
         if (dist as u16) < radius {
             X = dist as u16;
             let half: u8 = ARC[X];
@@ -175,9 +175,9 @@ fn setupCheckerboard() {
     VMAIN = VmainTrigger::High;
     set_vram_addr!(VRAM_BG1_MAP);
 
-    let row: u16 = 0;
+    let mut row: u16 = 0;
     while row < 32 {
-        let col: u16 = 0;
+        let mut col: u16 = 0;
         while col < 32 {
             let tile: u8 = (((row as u8) >> 1) + ((col as u8) >> 1)) & 1;
             VMDATAL = tile;
@@ -225,9 +225,9 @@ fn main() -> ! {
     setupCheckerboard();
     setupIrisHdma();
 
-    let radius: u16 = 0;
-    let dir: u8 = 1;
-    let arc_height: u8;
+    let mut radius: u16 = 0;
+    let mut dir: u8 = 1;
+    let mut arc_height: u8;
 
     if radius > 255 { arc_height = 255; } else { arc_height = radius as u8; }
     makeArc(arc_height, &ARC);

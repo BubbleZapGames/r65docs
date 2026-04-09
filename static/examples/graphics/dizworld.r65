@@ -307,9 +307,9 @@ fn udiv32_16(divisor: u16) {
 
     math_r_lo = 0;
     math_r_hi = 0;
-    let rem: u16 = 0;
+    let mut rem: u16 = 0;
 
-    let bit: u16 = 32;
+    let mut bit: u16 = 32;
     while bit > 0 {
         bit--;
 
@@ -457,7 +457,7 @@ fn oam_set_sprite(index: u8, sx: u8, sy: u8, tile: u8, attr: u8, large: u8) {
     let slot: u8 = index & 0x03;
     Y = ext_byte;
     let old: u8 = oam_buf[Y];
-    let result: u8;
+    let mut result: u8;
     if slot == 0 {
         result = (old & 0xFC) | (large & 0x03);
     } else if slot == 1 {
@@ -481,7 +481,7 @@ fn update_sprites() {
     let bird_tile: u8 = BIRD_FRAMES[Y];
 
     // Bird facing direction: check if moving forward or backward
-    let bird_attr: u8;
+    let mut bird_attr: u8;
     if pad & Joy::Up as u16 != 0 {
         bird_attr = BIRD_ATTR_UP;
     } else if pad & Joy::Down as u16 != 0 {
@@ -513,7 +513,7 @@ fn pv_rebuild() {
 
     // Compute horizon position based on camera height
     // Higher camera = lower horizon (more ground visible)
-    let sky_lines: u8;
+    let mut sky_lines: u8;
     if height < 32 {
         sky_lines = 160 - (height as u8);
     } else if height < 128 {
@@ -546,7 +546,7 @@ fn pv_rebuild() {
 
     // ZR step: (ZR1 - ZR0) / ground_lines
     if ground_lines > 1 {
-        let zr_range: u16;
+        let mut zr_range: u16;
         if pv_zr1 > pv_zr0 {
             zr_range = pv_zr1 - pv_zr0;
         } else {
@@ -582,8 +582,8 @@ fn pv_rebuild() {
 
     // Prescale cos/sin by SA for the mul8 calls in the scanline loop.
     // We need absolute values for mul8, track signs separately.
-    let abs_cos: u16;
-    let abs_sin: u16;
+    let mut abs_cos: u16;
+    let mut abs_sin: u16;
     if pv_cos < 0 {
         abs_cos = (0 - pv_cos) as u16;
         pv_negate_a = 1;
@@ -625,11 +625,11 @@ fn pv_rebuild() {
     // --- Build HDMA tables ---
     // Position cursors start at the buffer offset for double buffering
 
-    let ab_pos: u16 = lg_off;
-    let cd_pos: u16 = lg_off;
-    let bgm_pos: u16 = sm_off;
-    let tm_pos: u16 = sm_off;
-    let fade_pos: u16 = sm_off;
+    let mut ab_pos: u16 = lg_off;
+    let mut cd_pos: u16 = lg_off;
+    let mut bgm_pos: u16 = sm_off;
+    let mut tm_pos: u16 = sm_off;
+    let mut fade_pos: u16 = sm_off;
 
     // === Sky portion: Mode 1, BG2 visible ===
     // HDMA repeat mode: header byte = $80 | count, then 1 data byte (reused each line)
@@ -712,7 +712,7 @@ fn pv_rebuild() {
 
     // === Horizon fade (16 lines around transition) ===
     // Write 16 lines of fade as individual scanline entries
-    let fade_lines: u8;
+    let mut fade_lines: u8;
     if ground_lines > 16 { fade_lines = 16; } else { fade_lines = ground_lines; }
 
     // === Ground portion: Mode 7, BG1 visible ===
@@ -747,7 +747,7 @@ fn pv_rebuild() {
     // Continuous mode (no $80): each line gets a unique fade value
     if fade_lines > 0 {
         Y = fade_pos; hdma_fade[Y] = fade_lines; fade_pos++;
-        let fi: u8 = 0;
+        let mut fi: u8 = 0;
         while fi < fade_lines {
             let fade_idx: u8 = 17 + fi;  // Ground portion of fade table
             Y = fade_idx as u16;
@@ -780,8 +780,8 @@ fn pv_rebuild() {
     // Z = ZTABLE[ZR >> 4] gives depth for this scanline.
     // Matrix = Z * (prescaled rotation), giving A B C D.
 
-    let zr: u16 = pv_zr0;  // Start at near plane
-    let scanline: u16 = 0;
+    let mut zr: u16 = pv_zr0;  // Start at near plane
+    let mut scanline: u16 = 0;
 
     // Write ground portion of AB/CD as continuous-mode chunks
     // Continuous mode (bit 7 clear): each scanline gets unique 4-byte data
@@ -803,7 +803,7 @@ fn pv_rebuild() {
         }
 
         // Look up Z from table: index = zr >> 4
-        let z_idx: u16 = zr >> 4;
+        let mut z_idx: u16 = zr >> 4;
         if z_idx > 4095 { z_idx = 4095; }
         X = z_idx;
         let z: u8 = ZTABLE[X];
@@ -814,10 +814,10 @@ fn pv_rebuild() {
         let val_b: u16 = mul8(z, pv_scale_b) >> 5;
 
         // Apply negation based on rotation quadrant
-        let m7a: u16;
-        let m7b: u16;
-        let m7c: u16;
-        let m7d: u16;
+        let mut m7a: u16;
+        let mut m7b: u16;
+        let mut m7c: u16;
+        let mut m7d: u16;
 
         if pv_negate_a != 0 {
             m7a = 0 - val_a;
@@ -1288,10 +1288,10 @@ fn main() -> ! {
         // Scale decreases from bottom (near) to horizon (far)
 
         // Get absolute cos/sin for mul8 (unsigned multiply)
-        let abs_cos: u16;
-        let abs_sin: u16;
-        let neg_a: u8 = 0;
-        let neg_b: u8 = 0;
+        let mut abs_cos: u16;
+        let mut abs_sin: u16;
+        let mut neg_a: u8 = 0;
+        let mut neg_b: u8 = 0;
         if cos_val < 0 {
             abs_cos = (0 - cos_val) as u16;
             neg_a = 1;
@@ -1308,8 +1308,8 @@ fn main() -> ! {
         let cos7: u8 = (abs_cos >> 1) as u8;
         let sin7: u8 = (abs_sin >> 1) as u8;
 
-        let ab_pos: u16 = 0;
-        let cd_pos: u16 = 0;
+        let mut ab_pos: u16 = 0;
+        let mut cd_pos: u16 = 0;
 
         // Sky portion: identity matrix (held for sky_lines)
         // 1 block: [count, A_lo, A_hi, B_lo, B_hi]
@@ -1329,12 +1329,12 @@ fn main() -> ! {
         // ZR starts above the ZTABLE cap zone (Z<255 begins around ZR=2112)
         // so the horizon has a smooth scale gradient, not a flat wall.
         // Larger ZR → smaller Z → less zoom → farther away.
-        let zr: u16 = 3200;
+        let mut zr: u16 = 3200;
         let zr_step: u16 = 320;
-        let sl: u16 = 0;
+        let mut sl: u16 = 0;
         while sl < ground_lines as u16 {
             // Look up Z from reciprocal table
-            let z_idx: u16 = zr >> 4;
+            let mut z_idx: u16 = zr >> 4;
             if z_idx > 4095 { z_idx = 4095; }
             X = z_idx;
             let z: u8 = ZTABLE[X];
@@ -1344,10 +1344,10 @@ fn main() -> ! {
             let val_b: u16 = mul8(z, sin7) >> 5;
 
             // Apply signs: A=cos, B=sin, C=-sin, D=cos
-            let m7a: u16;
-            let m7b: u16;
-            let m7c: u16;
-            let m7d: u16;
+            let mut m7a: u16;
+            let mut m7b: u16;
+            let mut m7c: u16;
+            let mut m7d: u16;
 
             if neg_a != 0 { m7a = 0 - val_a; } else { m7a = val_a; }
             if neg_b != 0 { m7b = 0 - val_b; } else { m7b = val_b; }

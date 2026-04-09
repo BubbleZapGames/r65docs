@@ -142,12 +142,12 @@ fn setTileBG2(tx: u8, ty: u8, tile: u8, attr: u8) {
 // Check if any snake segment is at (cx, cy)
 // exclude_tail: 1 = skip tail segment (it will move away)
 fn isOnSnake(cx: u8, cy: u8, exclude_tail: u8) -> u8 {
-    let check_len: u8 = snake_len;
+    let mut check_len: u8 = snake_len;
     if exclude_tail != 0 {
         check_len = snake_len - 1;
     }
 
-    let i: u8 = 0;
+    let mut i: u8 = 0;
     while i < check_len {
         let idx: u8 = snake_head - i;
         if snake_x[idx] == cx && snake_y[idx] == cy {
@@ -163,7 +163,7 @@ fn isOnSnake(cx: u8, cy: u8, exclude_tail: u8) -> u8 {
 // ============================================================================
 
 fn placeFood() {
-    let placed: u8 = 0;
+    let mut placed: u8 = 0;
     while placed == 0 {
         let r: u16 = rand();
         let fx: u8 = (r as u8) & 0x1F;
@@ -209,7 +209,7 @@ fn uploadGraphics() {
 fn initBG1() {
     VMAIN = VmainTrigger::High;
     set_vram_addr!(VRAM_MAP1);
-    let i: u16 = 0;
+    let mut i: u16 = 0;
     while i < 1024 {
         VMDATAL = TILE_BG;
         VMDATAH = 0x00;
@@ -221,9 +221,9 @@ fn initBG1() {
 fn initBG2() {
     VMAIN = VmainTrigger::High;
     set_vram_addr!(VRAM_MAP2);
-    let y: u16 = 0;
+    let mut y: u16 = 0;
     while y < 32 {
-        let x: u16 = 0;
+        let mut x: u16 = 0;
         while x < 32 {
             if y < 28 && (y == 0 || y == 27 || x == 0 || x == 31) {
                 VMDATAL = TILE_WALL;
@@ -252,7 +252,7 @@ fn initGame() {
     snake_head = INITIAL_LEN - 1;
 
     // Build initial snake body going right
-    let i: u8 = 0;
+    let mut i: u8 = 0;
     while i < INITIAL_LEN {
         snake_x[i] = START_X - INITIAL_LEN + 1 + i;
         snake_y[i] = START_Y;
@@ -269,7 +269,7 @@ fn initGame() {
                HEAD_TILE[tail_opp], HEAD_FLIP[tail_opp] | BG2_PRI | PAL_ATTR[0 & 3]);
 
     // Draw body segments (between tail and head)
-    let j: u8 = 1;
+    let mut j: u8 = 1;
     while j < INITIAL_LEN - 1 {
         setTileBG2(snake_x[j], snake_y[j], TILE_BODY_H, BG2_PRI | PAL_ATTR[j & 3]);
         j++;
@@ -316,8 +316,8 @@ fn moveSnake() {
     // Compute new head position
     let sx: u8 = snake_x[snake_head];
     let sy: u8 = snake_y[snake_head];
-    let new_x: u8 = sx;
-    let new_y: u8 = sy;
+    let mut new_x: u8 = sx;
+    let mut new_y: u8 = sy;
 
     if direction == Dir::Up {
         new_y = sy - 1;
@@ -336,13 +336,13 @@ fn moveSnake() {
     }
 
     // Check food
-    let eating: u8 = 0;
+    let mut eating: u8 = 0;
     if new_x == food_x && new_y == food_y {
         eating = 1;
     }
 
     // Can we actually grow? (cap at 255 for u8 ring buffer)
-    let growing: u8 = 0;
+    let mut growing: u8 = 0;
     if eating != 0 && snake_len < 255 {
         growing = 1;
     }

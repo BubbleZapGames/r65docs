@@ -48,9 +48,9 @@ fn main() -> ! {
     set_main_layers!(Screen::BG1);
 
     // Animation state
-    let phase: u8 = 0;     // 0=pause, 1=ramp up, 2=ramp down
-    let frame: u16 = 0;
-    let level: u8 = 0;     // Mosaic level 0-16 (0=off, 16=max)
+    let mut phase: u8 = 0;     // 0=pause, 1=ramp up, 2=ramp down
+    let mut frame: u16 = 0;
+    let mut level: u8 = 0;     // Mosaic level 0-16 (0=off, 16=max)
 
     INIDISP = 0x0F;
     NMITIMEN = Interrupt::AutoJoy;
