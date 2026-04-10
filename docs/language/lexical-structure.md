@@ -73,16 +73,14 @@ These keywords are actively used in the grammar:
 | `as` | Type casting |
 | `macro_rules` | Macro definition |
 
-### Built-in Hardware Instructions (4)
+### Built-in Hardware Instructions
 
-These identifiers are recognized as built-in functions because they map to special 65816 hardware instructions:
-
-| Keyword | Purpose |
-|---------|---------|
-| `mvn` | Block move next (forward copy) |
-| `mvp` | Block move previous (backward copy) |
-| `wai` | Wait for interrupt |
-| `stp` | Stop processor |
+R65 no longer exposes raw 65816 instructions as built-in functions. Use
+`asm!("WAI")`, `asm!("STP")`, `asm!("XBA")`, `asm!("MVN ...")`,
+`asm!("COP ...")`, `asm!("BRK ...")` directly, or reach for the
+`stdlib/65816.r65` macros (`block_move!`, `stack_guard_check!`, etc.)
+when you want a typed wrapper. `NOP()` is still provided as a built-in
+because of its optional repeat-count argument.
 
 ### Reserved Rust Keywords (17)
 

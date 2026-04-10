@@ -17,26 +17,6 @@ These functions emit inline 65816 instructions. They are available everywhere an
 
 ### Processor Control
 
-#### `wai()`
-
-Halt the CPU until the next interrupt (NMI or IRQ).
-
-```rust
-wai();  // Emits: WAI
-```
-
-Common in main loops to idle between VBlank interrupts.
-
-#### `stp()`
-
-Stop the processor entirely. Only a hardware reset can resume execution.
-
-```rust
-stp();  // Emits: STP
-```
-
-Use for fatal error handlers or end-of-program halts.
-
 #### `NOP()` / `NOP(count)`
 
 No operation. With an argument, repeats `count` times.
@@ -48,23 +28,25 @@ NOP(4);   // Emits: NOP NOP NOP NOP (4x, 8 cycles)
 
 Used to insert timing delays, typically when waiting for hardware multiplier or divider results.
 
-#### `xba()`
-
-Exchange the low and high bytes of the 16-bit accumulator (swap A and B).
-
-```rust
-xba();  // Emits: XBA
-```
-
-### Software Interrupts
-
-#### `cop(signature)`
-
-Trigger a co-processor interrupt with the given signature byte.
+`NOP` is the only instruction-shaped built-in because its optional repeat
+count justifies dedicated compiler support. For other single-instruction
+primitives — `WAI`, `STP`, `XBA`, `COP`, `MVN`, `MVP`, `BRK` — use
+`asm!()` directly:
 
 ```rust
-cop(0x00);  // Emits: COP #$00
+asm!("WAI");          // Halt until next interrupt
+asm!("STP");          // Stop processor (fatal halt)
+asm!("XBA");          // Swap A/B bytes
+asm!("COP #$00");     // Co-processor interrupt
+asm!("BRK #$00");     // Debugger/software break
+asm!("MVN $00, $7E"); // Block move forward (see stdlib block_move!)
 ```
+
+For block moves against R65 symbols, prefer the `block_move!` macro in
+`stdlib/65816.r65`, which resolves banks from the symbols and handles
+DBR save/restore. For stack-overflow detection, see `stack_guard_check!`
+in the same file.
+
 ---
 
 ## Compile-Time Built-ins
@@ -353,11 +335,7 @@ static SQRT_TABLE: [u16; 64] = build_distance_table();
 
 | Function | Parameters | Returns | Description |
 |----------|-----------|---------|-------------|
-| `wai()` | none | void | Wait for interrupt |
-| `stp()` | none | void | Stop processor |
 | `NOP()` / `NOP(n)` | 0-1 | void | No-op, optionally repeated |
-| `xba()` | none | void | Swap A and B bytes |
-| `cop(sig)` | u8 | void | Co-processor interrupt |
 
 ### Compile-Time Only (produce constants)
 

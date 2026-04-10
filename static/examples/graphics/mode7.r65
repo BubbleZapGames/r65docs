@@ -233,17 +233,17 @@ fn main() -> ! {
     setupHdma();
     buildMatrixTables();
 
-    // Write scroll: extract integer from 8.8 via xba (high byte = integer)
-    // xba puts integer in A low byte; sign-extend for M7HOFS/M7VOFS high byte
+    // Write scroll: extract integer from 8.8 via XBA (high byte = integer)
+    // XBA puts integer in A low byte; sign-extend for M7HOFS/M7VOFS high byte
     A = CAMERA_X as u16;
-    xba();
+    asm!("XBA");
     let mut scroll_x: u8 = A;
     BG1HOFS = A;
     if A & 0x80 != 0 { A = 0xFF; } else { A = 0; }
     BG1HOFS = A;
 
     A = CAMERA_Y as u16;
-    xba();
+    asm!("XBA");
     let mut scroll_y: u8 = A;
     BG1VOFS = A;
     if A & 0x80 != 0 { A = 0xFF; } else { A = 0; }
@@ -268,14 +268,14 @@ fn main() -> ! {
 
         // Write scroll with sign extension
         A = CAMERA_X as u16;
-        xba();
+        asm!("XBA");
         scroll_x = A;
         BG1HOFS = A;
         if A & 0x80 != 0 { A = 0xFF; } else { A = 0; }
         BG1HOFS = A;
 
         A = CAMERA_Y as u16;
-        xba();
+        asm!("XBA");
         scroll_y = A;
         BG1VOFS = A;
         if A & 0x80 != 0 { A = 0xFF; } else { A = 0; }
