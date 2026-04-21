@@ -80,7 +80,7 @@ fn setupConsole() {
 }
 
 fn readInput() {
-    wait_autojoy();
+    wait_autojoy!();
     let pad: u16 = (JOY1H as u16) << 8 | (JOY1L as u16);
 
     if pad & Joy::Left as u16 != 0 {
@@ -124,7 +124,7 @@ fn main() -> ! {
     NMITIMEN = Interrupt::Nmi | Interrupt::AutoJoy;
 
     loop {
-        wait_nmi();
+        wait_nmi!();
 
         // Update scroll registers (must be during VBlank)
         set_bg1_hscroll!(scroll_x);

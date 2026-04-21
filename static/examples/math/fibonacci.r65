@@ -50,7 +50,7 @@ fn main() -> ! {
         fib_b = 1;
 
         // Print first two numbers: 0, 1
-        wait_nmi();
+        wait_nmi!();
         console.print!("{u16}", fib_a);
         delay(frame_delay);
         console.print!(",{u16}", fib_b);

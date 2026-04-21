@@ -915,7 +915,7 @@ fn pv_set_origin() {
 // ============================================================================
 
 fn read_input() {
-    wait_autojoy();
+    wait_autojoy!();
     pad_prev = pad;
     pad = (JOY1H as u16) << 8 | (JOY1L as u16);
 
@@ -1240,11 +1240,11 @@ fn main() -> ! {
     NMITIMEN = Interrupt::Nmi | Interrupt::AutoJoy;
 
     // Wait for first NMI to apply HDMA
-    wait_nmi();
+    wait_nmi!();
 
     loop {
-        wait_nmi();
-        wait_autojoy();
+        wait_nmi!();
+        wait_autojoy!();
         pad = (JOY1H as u16) << 8 | (JOY1L as u16);
 
         // Rotation: Left/Right

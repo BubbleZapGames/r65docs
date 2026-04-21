@@ -44,7 +44,7 @@ fn main() -> ! {
     set_brightness!(15);
 
     loop {
-        wait_nmi();
+        wait_nmi!();
     }
 }
 

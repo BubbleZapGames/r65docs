@@ -258,7 +258,7 @@ fn main() -> ! {
         makeArc(arc_height, &ARC);
         buildHdmaTable(radius, CENTER_X, CENTER_Y);
 
-        wait_nmi();
+        wait_nmi!();
 
         dma_set_src!(0, HDMA_TABLE);
         dma_set_hdma!(0x01);

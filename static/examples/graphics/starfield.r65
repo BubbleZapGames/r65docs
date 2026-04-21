@@ -224,7 +224,7 @@ fn main() -> ! {
     NMITIMEN = Interrupt::Nmi;
 
     loop {
-        wait_nmi();
+        wait_nmi!();
         updateStars();
     }
 }

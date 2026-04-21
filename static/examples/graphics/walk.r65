@@ -31,7 +31,7 @@ const SPR_ATTR: u8 = OamPriority::InFront as u8;
 const SPR_ATTR_HFLIP: u8 = OamPriority::InFront as u8 | OamFlip::H as u8;
 
 // Animation timing
-const ANIM_SPEED: u8 = 8;          // Frames per animation step
+const ANIM_SPEED: u8 = 255;          // Frames per animation step
 const WALK_SPEED: u8 = 2;          // Pixels per frame
 
 // Movement bounds
@@ -94,6 +94,9 @@ static mut anim_timer: u8;
 
 #[lowram]
 static mut frame_cnt: u16;
+
+#[lowram]
+static mut last_cnt: u16;
 
 #[lowram]
 static mut controller1: u16;
@@ -205,12 +208,12 @@ fn nmi_handler() {
 
     player.write_oam!(0);
 
-    // Read joypad data during vblank 
-    wait_autojoy();
-    controller1 = (JOY1H as u16) << 8 | (JOY1L as u16);
-
     frame_cnt++;
     clear_nmi!();
+    // Read joypad data during vblank 
+    wait_autojoy!();
+    controller1 = (JOY1H as u16) << 8 | (JOY1L as u16);
+    handleInput();
 }
 
 
@@ -245,6 +248,7 @@ fn main() -> ! {
     anim_frame = 0;
     anim_timer = 0;
     frame_cnt = 0;
+    last_cnt = 0;
 
     // Set sprite 0 as large (32x32) in extended OAM table
     OAMADDL = 0;
@@ -256,9 +260,9 @@ fn main() -> ! {
     NMITIMEN = Interrupt::Nmi | Interrupt::AutoJoy;
 
     loop {
-        wait_nmi();
-        handleInput();
         updateAnimation();
+        while frame_cnt != last_cnt {}
+        last_cnt = frame_cnt;
     }
 }
 

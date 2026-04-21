@@ -277,7 +277,7 @@ fn main() -> ! {
 
     // Main loop
     loop {
-        wait_nmi();
+        wait_nmi!();
         updateSprites();
     }
 }
