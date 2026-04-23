@@ -171,42 +171,34 @@ fn get_index() -> u16 {
 Functions can return up to three values using registers. No parentheses around the return list.
 
 ```rust
-fn divide(dividend @ A: u8, divisor @ X: u16) -> (u8, u8) {
+fn divide(dividend @ A: u8, divisor @ X: u16) -> rA, rX {
     // quotient in A, remainder in X
     return A, X;
 }
 ```
 
-**Register assignment convention for multiple returns:**
-
-| Position | Register |
-|----------|----------|
-| First | A |
-| Second | X or B |
-| Third | Y |
-
-The second return value uses B when both values are `u8` in m8 mode, and X otherwise.
+**Return register syntax**: `-> rA, rB`, `-> rA, rX`, `-> rX, rY`, etc. Registers must appear in hardware order: A, B, X, Y. `rB` is only valid in m8-mode functions. Implied types: `rA` → `u8` (m8) or `u16` (m16), `rB` → `u8`, `rX`/`rY` → `u16`.
 
 ```rust
-// Second return in B (both u8, m8 mode)
-fn unpack(word: u16) -> (u8, u8) {
+// A and B (both u8, m8 mode — B avoids a TAX)
+fn unpack(word: u16) -> rA, rB {
     A = word as u8;
     B = (word >> 8) as u8;
     return A, B;
 }
 
-// Second return in X (u16 value)
-fn compute() -> (u8, u16) {
+// A and X (u8 + u16)
+fn compute() -> rA, rX {
     A = 42;
     X = 1000;
     return A, X;
 }
 ```
 
-**Caller destructuring:**
+**Caller captures** with multi-binding:
 
 ```rust
-let (quotient, remainder) = divide(100, 7);
+let quotient, remainder = divide(100, 7);
 ```
 
 ### Return Signature Consistency
@@ -215,7 +207,7 @@ All return paths in a function must return the same registers and variables in t
 
 ```rust
 // Valid: all paths return A, X
-fn branch(flag: u8) -> (u8, u16) {
+fn branch(flag: u8) -> rA, rX {
     if flag != 0 {
         return A, X;
     }

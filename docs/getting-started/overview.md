@@ -119,10 +119,10 @@ fn get_status() -> u8 {
     // Implicit return of A
 }
 
-fn divide(a @ A: u8, b @ X: u8) -> (u8, u8) {
+fn divide(a @ A: u8, b @ X: u16) -> rA, rX {
     return A, X;  // Multiple return values
 }
-let (quotient, remainder) = divide(100, 7);
+let quotient, remainder = divide(100, 7);
 ```
 
 Functions that never return use `-> !`. The `#[preserves(X, Y)]` attribute generates automatic callee-save code for the listed registers.

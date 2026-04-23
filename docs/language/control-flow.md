@@ -389,13 +389,13 @@ fn validate(input @ A: u8) -> u8 {
 Functions can return up to three values using registers:
 
 ```rust
-fn get_xy() -> (u8, u8) {
+fn get_xy() -> rX, rY {
     X = PLAYER_X;
     Y = PLAYER_Y;
     return X, Y;
 }
 
-let (px, py) = get_xy();
+let px, py = get_xy();
 ```
 
 ### Never Type: `-> !`

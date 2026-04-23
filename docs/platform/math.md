@@ -23,7 +23,7 @@ include!("lib/I32.r65")      // Signed 32-bit integer
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `mul8` | `(multA @ A: u8, multB @ B: u8) -> (u8, u8)` | 8x8 unsigned multiply, returns (low, high) |
+| `mul8` | `(multA: u8, multB: u16) -> rA, rB` | 8x8 unsigned multiply, returns low in A, high in B |
 | `mul16` | `(multA @ A: u8, multB: u16) -> u16` | 8x16 unsigned multiply, returns 16-bit result |
 
 On SNES, these use the hardware multiplication unit (`WRMPYA`/`WRMPYB`) and complete in ~8 cycles. Software fallbacks use shift-and-add (~150-300 cycles).

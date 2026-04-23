@@ -64,30 +64,32 @@ let hitpoints @ A = PLAYER.health;  // A holds hitpoints
 
 Register aliases have zero runtime cost -- no memory allocation occurs. The variable name is a compile-time alias for the register.
 
-### Tuple Destructuring
+### Multi-Return Binding
 
-Multiple return values from a function call can be destructured into separate bindings.
+Functions that return multiple values via hardware registers can be captured in one statement.
 
 **Syntax:**
 
 ```rust
-let (a, b) = function_call();
+let a, b = function_call();      // declare and bind
+a, b = function_call();          // assign to existing variables
+let mut a, mut b = function_call(); // declare mutable and bind
 ```
 
 **Semantics:**
 
-- The right-hand side must be a function call returning a tuple type.
-- Each name in the tuple pattern binds to the corresponding return value.
-- The number of names must match the number of return values.
+- The right-hand side must be a function call whose return type lists two or more registers (`-> rA, rB`, `-> rA, rX`, etc.).
+- Each name binds to the corresponding return register, left-to-right.
+- The number of names must match the number of registers in the return type.
 
 **Examples:**
 
 ```rust
-fn get_position() -> (u8, u8) {
+fn get_position() -> rX, rY {
     return X, Y;
 }
 
-let (px, py) = get_position();
+let px, py = get_position();
 ```
 
 ---

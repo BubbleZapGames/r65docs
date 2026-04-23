@@ -256,45 +256,59 @@ let callback: fn(u8, u16) -> u8 = add;
 
 The calling convention (near vs. far) is encoded in the type. A `fn()` and `far fn()` are distinct, incompatible types.
 
-### Tuples
+### Multiple Return Values
 
-Tuples exist only as multiple return value types. They cannot be stored in variables, passed as parameters, or used in struct fields.
+A function can return up to four values by naming the hardware registers in the return type. Return register syntax uses `rA`, `rB`, `rX`, `rY` in hardware order:
 
 ```rust
-fn unpack(value: u16) -> (u8, u8) {
+fn unpack(value: u16) -> rA, rB {
     A = value as u8;
     B = (value >> 8) as u8;
     return A, B;
 }
 
-let (low, high) = unpack(0x1234);
+let low, high = unpack(0x1234);
 ```
 
-Supported tuple forms and their register mappings:
+**Register rules:**
+- Registers must appear in hardware order: A, B, X, Y.
+- `rB` is only valid in m8-mode functions (functions without a `@ A: u16` parameter).
+- Implied types: `rA` → `u8` (m8) or `u16` (m16), `rB` → `u8`, `rX`/`rY` → `u16`.
 
-| Return Type    | Registers Used           | Mode Requirement |
-|----------------|--------------------------|------------------|
-| `(u8, u8)`     | A, B                     | m8               |
-| `(u8, u16)`    | A, X                     | m8               |
-| `(u16, u16)`   | A, X                     | m16              |
+**Common return combinations:**
 
-Tuples are destructured at the call site only. There is no general-purpose tuple type.
+| Return Type   | Registers | Mode | Notes |
+|---------------|-----------|------|-------|
+| `-> rA, rB`   | A, B      | m8   | `B` avoids a TAX; both halves stay in the accumulator word |
+| `-> rA, rX`   | A, X      | m8   | u8 + u16 |
+| `-> rA, rX`   | A, X      | m16  | u16 + u16 |
+| `-> rA, rX, rY` | A, X, Y | m8   | three values |
+| `-> rA, rB, rX, rY` | A, B, X, Y | m8 | four values |
+
+Caller captures values with multi-binding — either declaring new variables or assigning to existing ones:
+
+```rust
+let a, b = get_pair();      // declare and bind
+a, b = get_pair();          // assign to existing variables
+```
+
+Multi-return values cannot be stored directly in variables outside of a call site capture. There is no general-purpose tuple type.
 
 ### Never Type
 
-The never type `!` indicates a function that never returns. The compiler omits `RTS`/`RTL` generation for such functions.
+The never type `!` indicates a function that never returns. Instead of a normal `RTS`/`RTL`, the compiler emits a branch-to-self infinite loop (`BRA $`) at the end of the function — there's no valid return address to return to, and a stray return would fall through to whatever bytes follow in ROM.
 
 ```rust
 fn main_loop() -> ! {
     loop {
-        wait_for_vblank();
+        wait_nmi!();
         update_game();
         render();
     }
 }
 ```
 
-Use `-> !` for the main game loop or any function that intentionally loops forever or halts the processor.
+Use `-> !` for the main game loop, reset handlers, or any function that intentionally loops forever or halts the processor. Entry functions (`#[entry]`) receive the same halt-loop treatment automatically.
 
 ### Type Aliases
 

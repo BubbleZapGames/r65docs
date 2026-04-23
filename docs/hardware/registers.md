@@ -87,7 +87,7 @@ fn pack_word(low @ A: u8, high @ B: u8) -> u16 {
 B can be returned alone or with other registers:
 
 ```rust
-fn unpack_word(value: u16) -> (u8, u8) {
+fn unpack_word(value: u16) -> rA, rB {
     A = value as u8;
     B = (value >> 8) as u8;
     return A, B;
