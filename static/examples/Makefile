@@ -7,7 +7,7 @@ WLA = wla-65816
 WLA_LINK = wlalink
 
 # Flags
-R65C_FLAGS = --cfg snes -I ~/R65/stdlib -I assets
+R65C_FLAGS = --cfg snes -I ~/R65/stdlib -I assets --dbg
 WLA_FLAGS = -I assets -o 
 
 # Build directory for intermediates

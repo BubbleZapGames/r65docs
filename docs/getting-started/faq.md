@@ -126,7 +126,9 @@ With `--cfg snes`, `mul8()` uses the SNES hardware multiplier for better perform
 
 ### Why are X and Y always 16-bit?
 
-R65 keeps the processor in x16 mode permanently. Mixed 8/16 index modes cause subtle bugs with stack-relative addressing and push/pull operations. The complexity of tracking index register width alongside accumulator width is rarely worth the 1-byte savings on index loads. If you only need 8-bit values in X or Y, the upper byte is simply ignored.
+R65 keeps the processor in x16 mode permanently. Mixed 8/16 index modes cause subtle bugs with stack-relative addressing and push/pull operations. The complexity of tracking index register width alongside accumulator width is rarely worth the 1-byte savings on index loads. If you really need 8-bit index mode you can temporarily set the `STATUS.XY16` register to `false` or make custom assembly routines but note the compiler will complain about any unsafe usages.
+
+
 
 ### What's `#[zeropage]` vs `#[ram]` vs `#[lowram]`?
 
@@ -138,7 +140,8 @@ These are storage classes that control where a `static mut` variable lives in me
 | `#[lowram]` | `$0000–$1FFF` | 3–4 cycles | 8 KB |
 | `#[ram]` | `$7E2000–$7FFFFF` | 4–5 cycles | ~120 KB |
 
-Use `#[zeropage]` for hot variables (loop counters, scratch registers). Use `#[ram]` for large buffers. Immutable `static` (no `mut`) goes to ROM automatically — no attribute needed.
+Use `#[zeropage]` for hot variables (loop counters, scratch registers). Use `#[ram]` for large buffers. Immutable `static` (no `mut`) goes to ROM automatically which no attribute is needed.
+
 
 ```rust
 #[zeropage]
@@ -154,7 +157,11 @@ See the [memory model documentation](../hardware/memory-model.md) for the comple
 
 ### How do I pass arrays/structs to functions?
 
-By pointer. R65 does not support pass-by-value for composite types — they would need to be copied onto the stack, which is expensive and limited (the 65816 stack is 256 bytes in practice).
+
+
+By pointer. R65 does not support pass-by-value for composite types so they would need to be copied onto the stack, which is expensive and limited (the stack is only 256 in some instances).
+
+
 
 ```rust
 fn clear_buffer(buf: far *u8, len @ X: u16) {
@@ -174,4 +181,5 @@ See [functions](../language/functions.md) for more.
 
 ### What license is R65?
 
-MIT. Full commercial and open-source use permitted.
+R65 is  open-sourced under the  MIT license. Full commercial and open-source use permitted.
+

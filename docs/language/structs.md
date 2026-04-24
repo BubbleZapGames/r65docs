@@ -167,7 +167,8 @@ static mut FAR_PTR: far *Player;
 FAR_PTR.health = 100;    // Auto-dereference through far pointer
 ```
 
-## Pass-by-Reference Only
+## Pass-by-Pointer Only
+
 
 Structs **cannot** be passed by value to functions, returned by value from functions, or directly assigned from one variable to another. This is a deliberate restriction: copying multi-byte structures is expensive on the 65816 and the cost should be explicit.
 

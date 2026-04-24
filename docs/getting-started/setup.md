@@ -6,14 +6,18 @@ This guide covers installing the R65 compiler toolchain and creating your first 
 
 R65 requires:
 
-- **Python 3.8+** (3.10 or later recommended)
-- **WLA-DX** assembler and linker (wla-65816, wlalink)
-- **Git** (to clone the repository)
+* **Python 3.8+** (3.10 or later recommended)
+* **WLA-DX** assembler and linker (wla-65816, wlalink)
+* **Git** (to clone the repository)
+* **make** (to use the generated Makefiles)
+
+
 
 Optional:
 
-- **Mesen** or **bsnes** emulator (to run compiled ROMs)
-- **make** (to use the generated Makefiles)
+* [**Mesen**](https://www.mesen.ca/) or [**bsnes**](https://github.com/bsnes-emu/bsnes) emulator (to run compiled ROMs)
+
+
 
 ---
 
@@ -36,13 +40,15 @@ If Python is not installed or too old:
 
 WLA-DX is the assembler and linker that converts R65 compiler output into SNES ROMs.
 
-**macOS (Homebrew):**
+**macOS / Linux (Homebrew):**
+
 
 ```bash
 brew install wla-dx
 ```
 
-**Linux (build from source):**
+**Other (build from source):**
+
 
 ```bash
 git clone https://github.com/vhelin/wla-dx.git
@@ -69,9 +75,7 @@ wlalink         # Should print usage info
 Clone the repository and install in development mode:
 
 ```bash
-git clone https://github.com/neutron-emulation/R65.git
-cd R65
-pip install -e .
+pip install https://github.com/BubbleZapGames/R65.git@release
 ```
 
 This installs three command-line tools:
@@ -88,14 +92,11 @@ r65c --help
 r65x --help
 ```
 
-### Development dependencies (optional)
 
-To run the test suite:
 
-```bash
-pip install -e ".[dev]"
-python -m pytest r65/tests/
-```
+
+
+
 
 ---
 
