@@ -1,0 +1,75 @@
+// irq.r65 — V-IRQ raster split demo
+//
+// Each frame the NMI (VBlank) resets the backdrop to white and advances
+// the IRQ scanline by one.  When the raster reaches that scanline the IRQ
+// fires and changes the backdrop to blue, producing a moving color split.
+
+#[snesrom(name="IRQ DEMO")]
+#[bank(0)]
+
+include!("sneslib.r65")
+
+// ============================================================================
+// State
+// ============================================================================
+
+#[zeropage]
+static mut irq_scanline: u8;
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const SCANLINE_MIN: u8 = 0;
+const SCANLINE_MAX: u8 = 224;
+
+// SNES 15-bit BGR: XBBBBBGGGGGRRRRR
+const COLOR_WHITE: u16 = 0x7FFF;
+const COLOR_BLUE: u16  = 0x7C00;   // blue[14:10] = 31, green/red = 0
+
+// ============================================================================
+// Interrupt handlers
+// ============================================================================
+
+#[interrupt(irq)]
+fn irq_handler() {
+    set_backdrop!(COLOR_BLUE);
+    A = TIMEUP;                 // acknowledge IRQ (clears TIMEUP flag)
+}
+
+#[interrupt(nmi)]
+fn nmi_handler() {
+    clear_nmi!();
+    set_backdrop!(COLOR_WHITE); // restore backdrop at start of VBlank
+
+    // Advance IRQ scanline and wrap
+    irq_scanline++;
+    if irq_scanline >= SCANLINE_MAX {
+        irq_scanline = SCANLINE_MIN;
+    }
+    set_virq!(irq_scanline);
+}
+
+// ============================================================================
+// Entry point
+// ============================================================================
+
+#[entry]
+fn main() -> ! {
+    snes_init();
+    NMITIMEN = 0;               // hold interrupts during setup
+
+    irq_scanline = SCANLINE_MIN;
+    set_virq!(irq_scanline);
+    set_backdrop!(COLOR_WHITE);
+
+    set_brightness!(Brightness::Full as u8);
+
+    // Enable NMI + V-count IRQ + auto-joypad
+    NMITIMEN = Interrupt::Nmi | Interrupt::IrqV | Interrupt::AutoJoy;
+    asm!("CLI");        // clear I flag so CPU will vector to IRQ handler
+
+    loop {
+        wait_nmi!();
+    }
+}

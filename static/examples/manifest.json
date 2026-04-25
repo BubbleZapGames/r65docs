@@ -111,6 +111,12 @@
           "name": "Interrupt Handler",
           "description": "Automatic register save/restore with #[interrupt(nmi)]",
           "file": "hardware/interrupt_handler.r65"
+        },
+        {
+          "id": "irq",
+          "name": "V-IRQ Raster Split",
+          "description": "Moving color split using V-count IRQ to change backdrop color mid-frame",
+          "file": "hardware/irq.r65"
         }
       ]
     }
