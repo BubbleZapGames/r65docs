@@ -8,6 +8,7 @@
 #[bank(0)]
 
 include!("sneslib.r65")
+include!("65816.r65")
 
 // ============================================================================
 // State
@@ -33,8 +34,8 @@ const COLOR_BLUE: u16  = 0x7C00;   // blue[14:10] = 31, green/red = 0
 
 #[interrupt(irq)]
 fn irq_handler() {
+    irq_ack!();
     set_backdrop!(COLOR_BLUE);
-    A = TIMEUP;                 // acknowledge IRQ (clears TIMEUP flag)
 }
 
 #[interrupt(nmi)]
@@ -67,7 +68,7 @@ fn main() -> ! {
 
     // Enable NMI + V-count IRQ + auto-joypad
     NMITIMEN = Interrupt::Nmi | Interrupt::IrqV | Interrupt::AutoJoy;
-    asm!("CLI");        // clear I flag so CPU will vector to IRQ handler
+    enable_irq!();
 
     loop {
         wait_nmi!();
