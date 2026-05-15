@@ -169,13 +169,13 @@ fn handleInput() {
     direction = Direction::None;
 
     // Vertical movement
-    if controller1 & Joy::Up as u16 != 0 {
+    if controller1 & JOY_UP != 0 {
         direction = Direction::North;
         last_dir = Direction::North;
         if char_y > MIN_Y {
             char_y = char_y - WALK_SPEED;
         }
-    } else if controller1 & Joy::Down as u16 != 0 {
+    } else if controller1 & JOY_DOWN != 0 {
         direction = Direction::South;
         last_dir = Direction::South;
         if char_y < MAX_Y {
@@ -184,13 +184,13 @@ fn handleInput() {
     }
 
     // Horizontal movement (independent, enables diagonals)
-    if controller1 & Joy::Left as u16 != 0 {
+    if controller1 & JOY_LEFT != 0 {
         direction = Direction::West;
         last_dir = Direction::West;
         if char_x > MIN_X {
             char_x = char_x - WALK_SPEED;
         }
-    } else if controller1 & Joy::Right as u16 != 0 {
+    } else if controller1 & JOY_RIGHT != 0 {
         direction = Direction::East;
         last_dir = Direction::East;
         if char_x < MAX_X {

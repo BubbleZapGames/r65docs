@@ -209,10 +209,10 @@ fn updateAnimation() {
 
 fn handleInput() {
     direction = Direction::None;
-    if controller1 & Joy::Left as u16 != 0 {
+    if controller1 & JOY_LEFT != 0 {
         direction = Direction::Left;
         scroll_x = scroll_x - WALK_SPEED;
-    } else if controller1 & Joy::Right as u16 != 0 {
+    } else if controller1 & JOY_RIGHT != 0 {
         direction = Direction::Right;
         scroll_x = scroll_x + WALK_SPEED;
     }

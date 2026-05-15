@@ -491,9 +491,9 @@ fn update_sprites() {
 
     // Bird facing direction: check if moving forward or backward
     let mut bird_attr: u8;
-    if pad & Joy::Up as u16 != 0 {
+    if pad & JOY_UP != 0 {
         bird_attr = BIRD_ATTR_UP;
-    } else if pad & Joy::Down as u16 != 0 {
+    } else if pad & JOY_DOWN != 0 {
         bird_attr = BIRD_ATTR_DOWN;
     } else {
         bird_attr = BIRD_ATTR_DOWN;
@@ -920,16 +920,16 @@ fn read_input() {
     pad = (JOY1H as u16) << 8 | (JOY1L as u16);
 
     // Rotation: Left/Right on D-pad
-    if pad & Joy::Left as u16 != 0 {
+    if pad & JOY_LEFT != 0 {
         angle = angle - ROTATE_SPEED;
     }
-    if pad & Joy::Right as u16 != 0 {
+    if pad & JOY_RIGHT != 0 {
         angle = angle + ROTATE_SPEED;
     }
 
     // Movement: Up/Down moves in facing direction
     // MOVE_SPEED=3: multiply by 3 via (val * 2 + val) since * requires power-of-2
-    if pad & Joy::Up as u16 != 0 {
+    if pad & JOY_UP != 0 {
         // Forward: add sin to X, add cos to Y
         X = (angle + 192) & 0xFF;
         let move_sin: i16 = COS_TABLE[X];
@@ -942,7 +942,7 @@ fn read_input() {
         add_to_posx(0 - dx);
         add_to_posy(0 - dy);
     }
-    if pad & Joy::Down as u16 != 0 {
+    if pad & JOY_DOWN != 0 {
         X = (angle + 192) & 0xFF;
         let move_sin: i16 = COS_TABLE[X];
         X = angle & 0xFF;
@@ -955,19 +955,19 @@ fn read_input() {
     }
 
     // Height: L/R shoulder buttons
-    if pad & Joy::L as u16 != 0 {
+    if pad & JOY_L != 0 {
         if height > HEIGHT_BASE {
             height = height - HEIGHT_SPEED;
         }
     }
-    if pad & Joy::R as u16 != 0 {
+    if pad & JOY_R != 0 {
         if height < HEIGHT_MAX {
             height = height + HEIGHT_SPEED;
         }
     }
 
     // Select: reset position
-    if pad & Joy::Select as u16 != 0 {
+    if pad & JOY_SELECT != 0 {
         posx_frac = 0;
         posx_int = 512;
         posy_frac = 0;
@@ -1248,10 +1248,10 @@ fn main() -> ! {
         pad = (JOY1H as u16) << 8 | (JOY1L as u16);
 
         // Rotation: Left/Right
-        if pad & Joy::Left as u16 != 0 {
+        if pad & JOY_LEFT != 0 {
             angle = angle + 2;
         }
-        if pad & Joy::Right as u16 != 0 {
+        if pad & JOY_RIGHT != 0 {
             angle = angle - 2;
         }
 
@@ -1261,15 +1261,15 @@ fn main() -> ! {
         // "once" header (count must be ≤127) covers both sides without
         // needing a split. The wider split-block HDMA code paths caused
         // intermittent freezes during testing and remain disabled.
-        if pad & Joy::L as u16 != 0 {
+        if pad & JOY_L != 0 {
             if height > HEIGHT_BASE { height = height - HEIGHT_SPEED; }
         }
-        if pad & Joy::R as u16 != 0 {
+        if pad & JOY_R != 0 {
             if height < HEIGHT_MAX { height = height + HEIGHT_SPEED; }
         }
 
         // Start: reset camera to start state.
-        if pad & Joy::Start as u16 != 0 {
+        if pad & JOY_START != 0 {
             angle = 0;
             height = HEIGHT_INIT;
             posx_int = 512;
@@ -1365,11 +1365,11 @@ fn main() -> ! {
 
         // Movement: Up/Down moves in facing direction
         // cos_val/sin_val are 8.8 fixed point. >> 6 gives ~4 pixels/frame speed.
-        if pad & Joy::Up as u16 != 0 {
+        if pad & JOY_UP != 0 {
             posx_int = (posx_int - ((sin_val as u16) >> 6)) & 0x03FF;
             posy_int = (posy_int - ((cos_val as u16) >> 6)) & 0x03FF;
         }
-        if pad & Joy::Down as u16 != 0 {
+        if pad & JOY_DOWN != 0 {
             posx_int = (posx_int + ((sin_val as u16) >> 6)) & 0x03FF;
             posy_int = (posy_int + ((cos_val as u16) >> 6)) & 0x03FF;
         }

@@ -83,15 +83,15 @@ fn readInput() {
     wait_autojoy!();
     let pad: u16 = (JOY1H as u16) << 8 | (JOY1L as u16);
 
-    if pad & Joy::Left as u16 != 0 {
+    if pad & JOY_LEFT != 0 {
         scroll_x = (scroll_x - SCROLL_SPEED) & SCROLL_MAX_MASK;
-    } else if pad & Joy::Right as u16 != 0 {
+    } else if pad & JOY_RIGHT != 0 {
         scroll_x = (scroll_x + SCROLL_SPEED) & SCROLL_MAX_MASK;
     }
 
-    if pad & Joy::Up as u16 != 0 {
+    if pad & JOY_UP != 0 {
         scroll_y = (scroll_y - SCROLL_SPEED) & SCROLL_MAX_MASK;
-    } else if pad & Joy::Down as u16 != 0 {
+    } else if pad & JOY_DOWN != 0 {
         scroll_y = (scroll_y + SCROLL_SPEED) & SCROLL_MAX_MASK;
     }
 }

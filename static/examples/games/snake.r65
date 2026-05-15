@@ -287,19 +287,19 @@ fn initGame() {
 // ============================================================================
 
 fn handleInput() {
-    if controller1 & Joy::Up as u16 != 0 {
+    if controller1 & JOY_UP != 0 {
         if direction != Dir::Down {
             next_dir = Dir::Up;
         }
-    } else if controller1 & Joy::Down as u16 != 0 {
+    } else if controller1 & JOY_DOWN != 0 {
         if direction != Dir::Up {
             next_dir = Dir::Down;
         }
-    } else if controller1 & Joy::Left as u16 != 0 {
+    } else if controller1 & JOY_LEFT != 0 {
         if direction != Dir::Right {
             next_dir = Dir::Left;
         }
-    } else if controller1 & Joy::Right as u16 != 0 {
+    } else if controller1 & JOY_RIGHT != 0 {
         if direction != Dir::Left {
             next_dir = Dir::Right;
         }

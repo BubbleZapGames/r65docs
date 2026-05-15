@@ -169,10 +169,10 @@ fn readInput() {
     let pad: u16 = (JOY1H as u16) << 8 | (JOY1L as u16);
 
     // Rotation
-    if pad & Joy::L as u16 != 0 {
+    if pad & JOY_L != 0 {
         ANGLE = ANGLE - ANGLE_SPEED;
     }
-    if pad & Joy::R as u16 != 0 {
+    if pad & JOY_R != 0 {
         ANGLE = ANGLE + ANGLE_SPEED;
     }
 
@@ -182,25 +182,25 @@ fn readInput() {
     let sin_val: i16 = SIN_TABLE[X];
 
     // CAMERA_X/Y are 8.8 fixed point. Add sin/cos directly (~1 px/frame).
-    if pad & Joy::Up as u16 != 0 {
+    if pad & JOY_UP != 0 {
         CAMERA_X = CAMERA_X - sin_val as u16;
         CAMERA_Y = CAMERA_Y - cos_val as u16;
     }
-    if pad & Joy::Down as u16 != 0 {
+    if pad & JOY_DOWN != 0 {
         CAMERA_X = CAMERA_X + sin_val as u16;
         CAMERA_Y = CAMERA_Y + cos_val as u16;
     }
-    if pad & Joy::Left as u16 != 0 {
+    if pad & JOY_LEFT != 0 {
         CAMERA_X = CAMERA_X - cos_val as u16;
         CAMERA_Y = CAMERA_Y + sin_val as u16;
     }
-    if pad & Joy::Right as u16 != 0 {
+    if pad & JOY_RIGHT != 0 {
         CAMERA_X = CAMERA_X + cos_val as u16;
         CAMERA_Y = CAMERA_Y - sin_val as u16;
     }
 
     // B button resets
-    if pad & Joy::B as u16 != 0 {
+    if pad & JOY_B != 0 {
         CAMERA_X = 0;
         CAMERA_Y = 0;
         ANGLE = 0;
