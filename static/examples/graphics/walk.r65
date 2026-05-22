@@ -31,7 +31,7 @@ const SPR_ATTR: u8 = OamPriority::InFront as u8;
 const SPR_ATTR_HFLIP: u8 = OamPriority::InFront as u8 | OamFlip::H as u8;
 
 // Animation timing
-const ANIM_SPEED: u8 = 255;          // Frames per animation step
+const ANIM_SPEED: u8 = 8;            // Frames per animation step
 const WALK_SPEED: u8 = 2;          // Pixels per frame
 
 // Movement bounds
@@ -261,7 +261,7 @@ fn main() -> ! {
 
     loop {
         updateAnimation();
-        while frame_cnt != last_cnt {}
+        while frame_cnt == last_cnt {}
         last_cnt = frame_cnt;
     }
 }

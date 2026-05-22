@@ -89,7 +89,7 @@ fn main() -> ! {
 
     dma_set_hdma!(0x01);
     INIDISP = 0x0F;
-    NMITIMEN = Interrupt::AutoJoy;
+    NMITIMEN = Interrupt::Nmi | Interrupt::AutoJoy;
 
     loop {
         wait_nmi!();

@@ -53,7 +53,7 @@ fn main() -> ! {
     let mut level: u8 = 0;     // Mosaic level 0-16 (0=off, 16=max)
 
     INIDISP = 0x0F;
-    NMITIMEN = Interrupt::AutoJoy;
+    NMITIMEN = Interrupt::Nmi | Interrupt::AutoJoy;
 
     loop {
         wait_nmi!();

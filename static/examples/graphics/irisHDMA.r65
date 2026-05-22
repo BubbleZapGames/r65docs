@@ -235,7 +235,7 @@ fn main() -> ! {
 
     //enable_hdma!(0x01);
     INIDISP = 0x0F;
-    NMITIMEN = Interrupt::AutoJoy;
+    NMITIMEN = Interrupt::Nmi | Interrupt::AutoJoy;
 
     loop {
 
