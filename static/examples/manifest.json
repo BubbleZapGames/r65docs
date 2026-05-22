@@ -12,17 +12,6 @@
       ]
     },
     {
-      "name": "Data Structures",
-      "examples": [
-        {
-          "id": "enum_struct",
-          "name": "Enums & Structs",
-          "description": "Packed structs and C-style enums with no padding or overhead",
-          "file": "data-structures/enum_struct.r65"
-        }
-      ]
-    },
-    {
       "name": "Math",
       "examples": [
         {
@@ -53,12 +42,6 @@
           "name": "Mosaic Fade",
           "description": "Cycling mosaic pixelation effect on a background image",
           "file": "graphics/mosaicFade.r65"
-        },
-        {
-          "id": "mode7",
-          "name": "Mode 7",
-          "description": "Top-down rotation with D-pad movement and L/R rotation via HDMA",
-          "file": "graphics/mode7.r65"
         },
         {
           "id": "sprite_priority",
