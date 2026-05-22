@@ -10,12 +10,13 @@ No. R65 uses Rust-*inspired* syntax but is a purpose-built language for the 6581
 
 Several things that hand-written assembly does not provide:
 
-- **Type checking** catches mode mismatches, bank overflow, and size errors at compile time — before you burn time debugging in an emulator.
-- **Automatic SEP/REP management.** The compiler tracks processor mode (m8/m16) and inserts mode switches as needed. No more forgetting a `SEP #$20` after a 16-bit operation.
-- **Register allocation with peephole optimization.** 10+ optimization passes: dead store elimination, redundant load tracking, loop rotation, STZ conversion, INC/DEC folding, LICM, count-down loop transformation, and more.
-- **Structured control flow.** `if`/`else`, `for`, `while`, `loop`, `match` with range/or patterns, labeled `break`/`continue` — all compiling to zero-overhead assembly.
-- **Structs, enums, const fn.** Organize data and compute values at compile time without runtime cost.
-- **Automatic branch distance fixup.** No manual short/long branch juggling.
+* **Type checking** catches mode mismatches, bank overflow, and size errors at compile time — before you burn time debugging in an emulator.
+* **Automatic SEP/REP management.** The compiler tracks processor mode (m8/m16) and inserts mode switches as needed. No more forgetting a `SEP #$20` after a 16-bit operation.
+* **Register allocation with peephole optimization.** 10+ optimization passes: dead store elimination, redundant load tracking, loop rotation, STZ conversion, INC/DEC folding, LICM, count-down loop transformation, and more.
+* **Structured control flow.** `if`/`else`, `for`, `while`, `loop`, `match` with range/or patterns, labeled `break`/`continue` which all compile to zero-overhead assembly.
+* **Structs, enums, const fn.** Organize data and compute values at compile time without runtime cost.
+* **Automatic branch distance fixup.** No manual short/long branch juggling.
+
 
 ### How does R65 compare to cc65?
 
@@ -61,40 +62,52 @@ Every omission has a hardware reason:
 | **Bounds checking** | Costs 8–12 cycles per access on a CPU where you get ~60,000 cycles per frame. |
 | **Dynamic collections** | No heap. Fixed-size arrays in RAM are all you have. |
 
-### Why no `unsafe`?
 
-All R65 code has direct hardware access by design. The entire language is what Rust calls `unsafe`. There is no safe/unsafe distinction because there is no runtime to protect — you are writing code that runs directly on the metal, touching hardware registers and memory-mapped I/O. An `unsafe` keyword would be meaningless.
 
-## Can I use R65 for real projects?
+
+
+
+
 
 ### How mature is the compiler?
 
 Currently under Alpha status as an initial preview release.
 
-The full pipeline is functional: Source → Lexer → Parser → HIR → Type Check → MIR → CodeGen → WLA-DX assembly.
 
-- **1,794 tests** passing (unit + end-to-end with emulator verification via Mesen)
-- Working example ROMs demonstrating sprites, scrolling, DMA, Mode 7, and controller input
-- Under active development with regular commits
 
-The compiler is usable for real SNES ROM development today, though new features and optimizations are still being added. No guarantee future builds won't break compatiblity and library api.
+
+
+The compiler is usable for real SNES ROM development today, though new features and optimizations are still being added.
+
+See our example game [Classic Kong](https://github.com/BubbleZapGames/classickong.r65).
+
+
 
 ### Can I mix R65 with hand-written assembly?
 
 Yes. Two mechanisms:
 
-**Inline assembly** with `asm!()`:
+**Inline assembly** with `asm!()` — drop instructions directly into a function:
 ```rust
 asm!("WAI");              // Single instruction
 asm!("PHP", "WAI");       // Multiple instructions
 ```
 
-**File inclusion** with `include!()`:
+**Linking external `.s` files** with `include_asm!()` + `extern` declarations.
+Pull a hand-written assembly file into the build and declare its symbols with
+an R65 ABI signature so the type checker and code generator can call them:
 ```rust
-include!("hardware.r65");  // Textual inclusion (like C's #include)
+include_asm!("vendor/sound.s");   // Assembles the .s into the current bank
+
+extern fn sound_tick(a @ A: u8) -> u8;   // near, JSR into current bank
+extern far fn sound_play(id @ A: u8);    // far, JSL (24-bit) into any bank
+extern static SONG_TABLE: [u8; 64];      // label owned by the .s file
+extern static mut SOUND_RAM: [u8; 256];
 ```
 
-The standard library itself uses `asm!()` extensively — DMA macros, hardware multiply, random number generation. You are not fighting the compiler to use assembly; it is a first-class feature.
+
+The standard library itself uses `asm!()` extensively with DMA macros, hardware multiply, random number generation. You are not fighting the compiler to use assembly; it is a first-class feature.
+
 
 ### What emulators/debuggers work with R65?
 
@@ -159,7 +172,8 @@ See the [memory model documentation](../hardware/memory-model.md) for the comple
 
 
 
-By pointer. R65 does not support pass-by-value for composite types so they would need to be copied onto the stack, which is expensive and limited (the stack is only 256 in some instances).
+By pointer. R65 does not support pass-by-value or Rust pass-by reference for composite types so they would need to be copied onto the stack, which is expensive and limited (the stack is only 256 in some instances).
+
 
 
 
