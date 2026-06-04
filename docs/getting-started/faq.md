@@ -31,6 +31,16 @@ Several things that hand-written assembly does not provide:
 
 cc65 is better for generic 6502 targets and portable C code. R65 is better for 65816 specific work where you need direct hardware control and want the compiler to catch language specific mistakes.
 
+### Can I use R65 for 6502 development?
+
+No. R65 emits native-mode 65816 code that a plain 6502 cannot run. The 65816 is backward-compatible with the 6502 instruction set, but R65 depends on 65816-only features throughout:
+
+* **16-bit registers and mode switching.** X and Y are always 16-bit (x16 mode) and the accumulator switches between m8/m16 with `REP`/`SEP` — instructions the 6502 doesn't have.
+* **24-bit addressing and banks.** `far` pointers, `#[bank(n)]`, and `JSL`/`RTL` cross-bank calls all rely on the 65816's 16 MB address space.
+* **Relocatable direct page and stack-relative addressing.** Parameter passing and register allocation assume `D` and `S` behave as they do on the 65816.
+
+So R65 cannot target 6502-based machines like the NES, Commodore 64, Apple II, or Atari 8-bit — use [cc65](https://cc65.github.io/) or hand-written 6502 assembly for those. R65 is purpose-built for the 65816, with its standard library and tooling focused on the SNES.
+
 ## What Rust features does R65 have / not have?
 
 ### What's supported?
