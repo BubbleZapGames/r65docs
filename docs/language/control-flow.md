@@ -386,10 +386,10 @@ fn validate(input @ A: u8) -> u8 {
 
 ### Multiple Return Values
 
-Functions can return up to three values using registers:
+Functions can return up to four values by listing their types:
 
 ```rust
-fn get_xy() -> rX, rY {
+fn get_xy() -> u16, u16 {
     X = PLAYER_X;
     Y = PLAYER_Y;
     return X, Y;

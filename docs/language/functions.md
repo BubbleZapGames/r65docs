@@ -168,27 +168,27 @@ fn get_index() -> u16 {
 
 ### Multiple Return Values
 
-Functions can return up to three values using registers. No parentheses around the return list.
+Functions can return up to four values by listing their types after `->`. No parentheses around the return list, and no register names — the compiler maps each value to a register from its type and the function's mode.
 
 ```rust
-fn divide(dividend @ A: u8, divisor @ X: u16) -> rA, rX {
+fn divide(dividend @ A: u8, divisor @ X: u16) -> u8, u16 {
     // quotient in A, remainder in X
     return A, X;
 }
 ```
 
-**Return register syntax**: `-> rA, rB`, `-> rA, rX`, `-> rX, rY`, etc. Registers must appear in hardware order: A, B, X, Y. `rB` is only valid in m8-mode functions. Implied types: `rA` → `u8` (m8) or `u16` (m16), `rB` → `u8`, `rX`/`rY` → `u16`.
+**Return type list**: `-> u8, u8`, `-> u8, u16`, `-> u16, u16`, etc. Values are assigned to registers in order: the first to `A` (mode-width), the second to `B` when it is 8-bit in m8 mode (otherwise `X`), then `X` and `Y`. `X` and `Y` are always 16-bit, so the third and fourth values must be 16-bit types, and a fourth value is only possible when the second is 8-bit in m8 mode (which frees `B`).
 
 ```rust
 // A and B (both u8, m8 mode — B avoids a TAX)
-fn unpack(word: u16) -> rA, rB {
+fn unpack(word: u16) -> u8, u8 {
     A = word as u8;
     B = (word >> 8) as u8;
     return A, B;
 }
 
 // A and X (u8 + u16)
-fn compute() -> rA, rX {
+fn compute() -> u8, u16 {
     A = 42;
     X = 1000;
     return A, X;
@@ -207,7 +207,7 @@ All return paths in a function must return the same registers and variables in t
 
 ```rust
 // Valid: all paths return A, X
-fn branch(flag: u8) -> rA, rX {
+fn branch(flag: u8) -> u8, u16 {
     if flag != 0 {
         return A, X;
     }

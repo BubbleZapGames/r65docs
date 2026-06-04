@@ -84,17 +84,17 @@ fn pack_word(low @ A: u8, high @ B: u8) -> u16 {
 
 ### Return Values
 
-B can be returned alone or with other registers:
+B serves as the second return register when a function returns two 8-bit values in m8 mode. Write the value types in the return list (`-> u8, u8`); the compiler places the first value in A and the second in B:
 
 ```rust
-fn unpack_word(value: u16) -> rA, rB {
+fn unpack_word(value: u16) -> u8, u8 {
     A = value as u8;
     B = (value >> 8) as u8;
     return A, B;
 }
 ```
 
-When a function returns only B (without A), the callee does **not** restore A. The caller is responsible for preserving A if needed.
+The first return value always lands in A — there is no way to return a value in B without also returning one in A.
 
 ### Register Aliasing
 

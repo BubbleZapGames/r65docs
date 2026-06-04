@@ -78,14 +78,12 @@ fn example(val @ A: u8) {
     // A: u8 (m8 mode)
     // X: u16, Y: u16 (always)
     X = 1000;    // OK
-    A = 10;      // OK
+    val = 10;      // OK
 }
 
 fn wide(val @ A: u16) {
     // A: u16 (m16 mode)
-    // B: not available
-    A = 1000;    // OK
-    // B = 5;    // ERROR: B not available in m16 mode
+    val = 1000;    // OK
 }
 ```
 
@@ -110,13 +108,12 @@ Fixed-size arrays with elements packed contiguously in memory.
 #[ram]
 static mut BUFFER: [u8; 256] = [0; 256];
 
-#[ram]
 static mut MESSAGE: [u8; 16] = "Hello, World!";  // String literal, zero-padded
 ```
 
 Arrays cannot be passed by value to functions. Pass a pointer instead.
 
-Out-of-bounds access is undefined behavior. The compiler performs no runtime checks.
+Dynamic array access which is out-of-bounds is undefined behavior. The compiler performs no runtime checks.
 
 ### Structs
 
@@ -258,10 +255,10 @@ The calling convention (near vs. far) is encoded in the type. A `fn()` and `far 
 
 ### Multiple Return Values
 
-A function can return up to four values by naming the hardware registers in the return type. Return register syntax uses `rA`, `rB`, `rX`, `rY` in hardware order:
+A function can return up to four values by listing their **types** after `->`, separated by commas. You write the types — not register names — and the compiler assigns each value to a hardware register automatically:
 
 ```rust
-fn unpack(value: u16) -> rA, rB {
+fn unpack(value: u16) -> u8, u8 {
     A = value as u8;
     B = (value >> 8) as u8;
     return A, B;
@@ -270,20 +267,28 @@ fn unpack(value: u16) -> rA, rB {
 let low, high = unpack(0x1234);
 ```
 
-**Register rules:**
-- Registers must appear in hardware order: A, B, X, Y.
-- `rB` is only valid in m8-mode functions (functions without a `@ A: u16` parameter).
-- Implied types: `rA` → `u8` (m8) or `u16` (m16), `rB` → `u8`, `rX`/`rY` → `u16`.
+**Register assignment.** Values are placed into registers in this order, based on their size and the function's accumulator mode:
+
+| Position | Register | Holds |
+|----------|----------|-------|
+| 1st      | `A`      | 1 byte in m8, 2 bytes in m16 |
+| 2nd      | `B` if it is 8-bit and the function is m8, otherwise `X` | `B`: 1 byte · `X`: 2 bytes |
+| 3rd      | `X` (or `Y` if `B` was used) | 2 bytes |
+| 4th      | `Y`      | 2 bytes |
+
+Because `X` and `Y` are always 16-bit, the third and fourth values must be 16-bit types. A fourth value is only possible when the second value is 8-bit in m8 mode (which frees the `B` register); otherwise the maximum is three values.
 
 **Common return combinations:**
 
-| Return Type   | Registers | Mode | Notes |
-|---------------|-----------|------|-------|
-| `-> rA, rB`   | A, B      | m8   | `B` avoids a TAX; both halves stay in the accumulator word |
-| `-> rA, rX`   | A, X      | m8   | u8 + u16 |
-| `-> rA, rX`   | A, X      | m16  | u16 + u16 |
-| `-> rA, rX, rY` | A, X, Y | m8   | three values |
-| `-> rA, rB, rX, rY` | A, B, X, Y | m8 | four values |
+| Return Type            | Registers   | Mode | Notes |
+|------------------------|-------------|------|-------|
+| `-> u8, u8`            | A, B        | m8   | `B` avoids a TAX; both bytes stay in the accumulator word |
+| `-> u8, u16`           | A, X        | m8   | u8 + u16 |
+| `-> u16, u16`          | A, X        | m16  | two 16-bit values (requires an `@ A: u16` parameter) |
+| `-> u8, u16, u16`      | A, X, Y     | m8   | three values |
+| `-> u8, u8, u16, u16`  | A, B, X, Y  | m8   | four values |
+
+A type that cannot fit its assigned register is a compile error — for example `-> u16, u8` in m8 mode (register `A` holds only one byte) or `-> u8, u8, u8` (the third value maps to the 16-bit `X` register). There is no register-name spelling: `-> rA, rB` is not valid syntax.
 
 Caller captures values with multi-binding — either declaring new variables or assigning to existing ones:
 

@@ -78,14 +78,14 @@ let mut a, mut b = function_call(); // declare mutable and bind
 
 **Semantics:**
 
-- The right-hand side must be a function call whose return type lists two or more registers (`-> rA, rB`, `-> rA, rX`, etc.).
-- Each name binds to the corresponding return register, left-to-right.
-- The number of names must match the number of registers in the return type.
+- The right-hand side must be a function call whose return type lists two or more types (`-> u8, u8`, `-> u8, u16`, etc.).
+- Each name binds to the corresponding return value, left-to-right.
+- The number of names must match the number of values in the return type.
 
 **Examples:**
 
 ```rust
-fn get_position() -> rX, rY {
+fn get_position() -> u16, u16 {
     return X, Y;
 }
 

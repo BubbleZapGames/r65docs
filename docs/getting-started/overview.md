@@ -119,7 +119,7 @@ fn get_status() -> u8 {
     // Implicit return of A
 }
 
-fn divide(a @ A: u8, b @ X: u16) -> rA, rX {
+fn divide(a @ A: u8, b @ X: u16) -> u8, u16 {
     return A, X;  // Multiple return values
 }
 let quotient, remainder = divide(100, 7);
