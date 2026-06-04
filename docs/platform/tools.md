@@ -6,7 +6,7 @@ description: Useful tools for managing projects
 
 # R65 Project Tool (`r65x`)
 
-`r65x` is the R65 project management and asset pipeline tool. It provides project scaffolding, font generation, data compression, and bitmap-to-tile conversion for SNES development.
+`r65x` is the R65 project management and asset pipeline tool. It provides project scaffolding, font generation, data compression, bitmap-to-tile conversion, and audio sample encoding for SNES development.
 
 ```bash
 r65x --help
@@ -181,6 +181,45 @@ r65x bmp2chr assets/level1_bg.bmp -o build/level1.chr -b2 --tilemap
 
 ---
 
+## `r65x brr` — SNES audio sample encoding
+
+Encodes and decodes SNES audio samples in the BRR (Bit Rate Reduction) format used by the S-SMP/DSP. Encoding compresses 16-bit mono WAV audio into BRR blocks, selecting the best filter (0–3) and shift (0–12) per 16-sample block; decoding reconstructs PCM audio back to a WAV file.
+
+```bash
+# Encode a WAV sample to BRR
+r65x brr encode sample.wav -o sample.brr
+
+# Decode a BRR sample back to WAV
+r65x brr decode sample.brr -o sample.wav
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `encode` or `decode` | Action (WAV → BRR or BRR → WAV) |
+| `inputfile` | Input file (`.wav` for encode, `.brr` for decode) |
+| `-o`, `--output` | Output file path (required) |
+
+**Input requirements:**
+
+- For `encode`, the input must be a 16-bit mono `.wav` file.
+- BRR output contains raw 9-byte blocks (1 header byte + 8 sample bytes); the loop and end flags are set on the final block.
+- Decoded WAV output is mono 16-bit PCM at 32 kHz.
+
+**Example: encode a sound effect for ROM inclusion:**
+
+```bash
+r65x brr encode assets/jump.wav -o build/jump.brr
+
+# Include the BRR sample in R65 source
+# static JUMP_SFX = include_bytes!("../build/jump.brr");
+```
+
+The game code uploads the BRR data to the SPC700/DSP for playback at runtime.
+
+---
+
 ## Typical asset pipeline
 
 A common SNES project workflow combines these tools:
@@ -200,7 +239,10 @@ r65x packer pack build/bg.chr -o build/bg.lz4 -x lz4
 # 4. Generate font
 r65x fontgen > src/lib/my_font.r65
 
-# 5. Build ROM
+# 5. Encode audio samples
+r65x brr encode assets/jump.wav -o build/jump.brr
+
+# 6. Build ROM
 make
 ```
 
