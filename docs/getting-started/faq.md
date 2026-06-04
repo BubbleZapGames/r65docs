@@ -43,11 +43,11 @@ cc65 is better for generic 6502 targets and portable C code. R65 is better for 6
 - `const fn` for compile-time computation
 - `macro_rules!` with 6 fragment types
 - Explicit type casts via `as`
-- `include!()` and `asm!()` for file inclusion and inline assembly
+- `include!()`, `include_asm!()` and `asm!()` for file inclusion and inline assembly
 
 See the [language overview](overview.md) for a walkthrough.
 
-### What's intentionally omitted and why?
+### What Rust features are intentionally omitted and why?
 
 Every omission has a hardware reason:
 
@@ -71,11 +71,7 @@ Every omission has a hardware reason:
 
 ### How mature is the compiler?
 
-Currently under Alpha status as an initial preview release.
-
-
-
-
+Currently under Beta status as with ongoing development trials.
 
 The compiler is usable for real SNES ROM development today, though new features and optimizations are still being added.
 
@@ -172,7 +168,7 @@ See the [memory model documentation](../hardware/memory-model.md) for the comple
 
 
 
-By pointer. R65 does not support pass-by-value or Rust pass-by reference for composite types so they would need to be copied onto the stack, which is expensive and limited (the stack is only 256 in some instances).
+By pointer. R65 does not support pass-by-value or Rust pass-by reference for composite types so they would need to be copied onto the stack, which is expensive and limited (the stack is only 256 in some instances). The best language performance is acheived by referencing static variables in code since they have a constant memory addresses.
 
 
 
