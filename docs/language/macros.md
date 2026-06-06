@@ -1,7 +1,7 @@
 ---
 sidebar_position: 11
 title: "Macros"
-description: "R65 macro system, fragment types, repetition, inline assembly, and built-in macros."
+description: "R65 macro system, fragment types, multiple arms, repetition, inline assembly, and built-in macros."
 ---
 
 # Macros
@@ -12,11 +12,24 @@ R65 provides a simplified macro system inspired by Rust's `macro_rules!`, design
 
 ### Definition
 
+Single-arm shorthand:
+
 ```rust
 macro_rules! name($param1:fragment, $param2:fragment) {
     // body using $param1 and $param2
 }
 ```
+
+Multi-arm (Rust-style), with arms separated by `;` (the trailing `;` is optional):
+
+```rust
+macro_rules! name {
+    ($param:fragment)           => { /* body for one argument */ };
+    ($a:fragment, $b:fragment)  => { /* body for two arguments */ };
+}
+```
+
+The shorthand is exactly a single-arm macro. See [Multiple Arms](#multiple-arms).
 
 ### Invocation
 
@@ -42,7 +55,7 @@ fn main() {
 
 ### Key Properties
 
-- **Single pattern per macro**: Unlike Rust, R65 macros have exactly one pattern. No `=>` syntax and no multiple arms.
+- **Shorthand or multiple arms**: A macro is either the concise `name(params) { body }` shorthand (one pattern) or a Rust-style multi-arm `name { (pat) => { body }; ... }`. See [Multiple Arms](#multiple-arms).
 - **No hygiene**: Like C macros, generated names can collide with names in the calling scope. Programmer responsibility.
 - **AST-level expansion**: Macros are expanded after parsing, operating on AST nodes rather than raw tokens.
 - **Global scope**: All macros are visible globally after their definition.
@@ -199,6 +212,67 @@ $($x:expr),*     // Comma-separated
 $($x:expr);*     // Semicolon-separated
 $($x:expr)*      // No separator
 ```
+
+## Multiple Arms
+
+A macro may define several arms, each with its own pattern and body. At a call site
+the compiler picks the **first arm that matches** the arguments, scanning top to bottom.
+
+```rust
+macro_rules! use_var {
+    ($name:ident)              => { $name = 0; };
+    ($name:ident, $v:literal)  => { $name = $v; };
+}
+
+fn main() {
+    use_var!(score);       // arm 1 -> score = 0;
+    use_var!(score, 5);    // arm 2 -> score = 5;
+}
+```
+
+Arms are separated by `;`; the semicolon after the last arm is optional. Each arm body
+is wrapped in `{ }` after the `=>`, and each arm may use its own fragment types and
+`$(...),*` repetition.
+
+### How an Arm Is Selected
+
+An arm matches when **both** hold:
+
+1. **Argument count** fits the arm's parameters (exact for fixed arms; "at least the
+   leading count" for an arm ending in `$(...),*`).
+2. **Fragment type** of each argument is compatible with the corresponding parameter.
+   This lets arms of the *same* arity be distinguished:
+
+   ```rust
+   macro_rules! load {
+       ($r:reg)     => { A = $r; };   // load!(X)   -> A = X;
+       ($v:literal) => { A = $v; };   // load!(42)  -> A = 42;
+       ($n:ident)   => { A = $n; };   // load!(foo) -> A = foo;
+   }
+   ```
+
+   Classification follows the lexer: `reg` matches a hardware register, `literal` a
+   single integer/string/char/boolean literal, `ident` a non-register identifier, `ty`
+   a type, and `expr`/`tt` anything.
+
+Because the first compatible arm wins, **order specific arms before catch-all arms**.
+An `($x:expr)` or `($x:tt)` arm matches any single argument, so place it last:
+
+```rust
+macro_rules! describe {
+    ($r:reg)  => { /* register case */ };
+    ($x:expr) => { /* everything else */ };   // catch-all goes last
+}
+```
+
+If no arm matches, compilation fails with an error listing every arm's signature.
+
+### Relationship to the Shorthand
+
+The shorthand `macro_rules! name(params) { body }` is exactly a single-arm macro. Because
+fragment types are only consulted to choose *between* arms, a single-arm macro matches on
+argument count alone (its fragment types are documentation only). This keeps every
+existing single-arm macro behaving exactly as before.
 
 ## Expression Parenthesization
 
@@ -411,7 +485,8 @@ fn example() {
 
 | Feature | Rust | R65 |
 |---------|------|-----|
-| Multiple patterns | Yes (`=>` arms) | No (single pattern) |
+| Multiple patterns | Yes (`=>` arms) | Yes (`=>` arms), or single-pattern shorthand |
+| Arm selection | Full pattern matching | Argument count + fragment type |
 | Repetition quantifiers | `*`, `+`, `?` | `*` only |
 | Repetition separators | Any token | Comma only |
 | Fragment types | 10+ | 6 |
