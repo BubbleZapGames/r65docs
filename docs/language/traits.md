@@ -123,6 +123,60 @@ impl NearTrait for MyStruct { /* ... */ }  // OK
 impl FarTrait for MyStruct { /* ... */ }   // ERROR: already has near trait
 ```
 
+## Trait Inheritance (Supertraits)
+
+A trait can require one or more **supertraits**, listed after a `:`:
+
+```rust
+trait Position { fn px(*self) -> u8; }
+trait Sprite   { fn tile(*self) -> u8; }
+
+trait Drawable: Position + Sprite {
+    fn draw(*self);
+}
+```
+
+### Requirement
+
+Implementing a subtrait requires implementing every transitive supertrait, each in its
+own `impl` block:
+
+```rust
+impl Position for Player { fn px(*self) -> u8 { return self.x; } }
+impl Sprite   for Player { fn tile(*self) -> u8 { return 7; } }
+impl Drawable for Player { fn draw(*self) { /* ... */ } }
+// Omitting impl Position or impl Sprite for Player is a compile error.
+```
+
+### Calling Inherited Methods
+
+A `*dyn Drawable` can call `Drawable`'s own methods **and** all inherited supertrait
+methods. Inherited calls dispatch through the supertrait's own TypeId jump table:
+
+```rust
+let d: *dyn Drawable = &PLAYER;
+d.draw();   // Drawable's own method
+d.px();     // inherited from Position
+```
+
+### Upcasting
+
+Every implementor carries a single TypeId byte at offset 0, so `*dyn Sub` and `*dyn Super`
+to the same object are bit-identical. Upcasting is a zero-cost coercion:
+
+```rust
+let d: *dyn Drawable = &PLAYER;
+let p: *dyn Position = d;   // upcast, no runtime cost
+p.px();
+```
+
+### Rules
+
+- Supertraits are named only on the trait declaration, never on `impl`.
+- The supertrait graph must be acyclic.
+- A subtrait may not redeclare a method or constant name from a transitive supertrait.
+- A trait and its supertraits must share the same near/far calling convention.
+
 ## TypeId System
 
 ### Automatic Insertion
@@ -375,11 +429,12 @@ The maximum number of distinct struct types with trait implementations is 255 (T
 
 1. **No generics**: Traits cannot be parameterized with types.
 2. **No default implementations**: Every method must be implemented by every implementor.
-3. **No supertraits**: Traits cannot extend or require other traits.
-4. **No associated types**: Only associated constants are supported.
-5. **No trait bounds**: Function signatures cannot require trait implementations.
-6. **Near/far exclusivity**: A struct cannot implement both near and far traits.
-7. **No self by value**: All trait methods must take `*self` (a pointer).
+3. **No associated types**: Only associated constants are supported.
+4. **No trait bounds**: Function signatures cannot require trait implementations.
+5. **Near/far exclusivity**: A struct cannot implement both near and far traits.
+6. **No self by value**: All trait methods must take `*self` (a pointer).
+
+Supertraits (trait inheritance) **are** supported — see [Trait Inheritance](#trait-inheritance-supertraits).
 
 ## Complete Example
 
