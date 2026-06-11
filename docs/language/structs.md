@@ -63,11 +63,11 @@ PLAYER.take_damage(5);    // Compiler passes &PLAYER as self
 let x = PLAYER.get_x();
 ```
 
-Use `impl far` for methods that operate on far pointers:
+A method's `self` pointer drives whether it is near or far — write `*self` for a near method, or `far *self` for one that operates on far pointers. There is no impl-level qualifier:
 
 ```rust
-impl far Player {
-    fn update(far *self) {
+impl Player {
+    fn update(far *self) {          // far self
         self.health = self.health - 1;
     }
 }
@@ -94,7 +94,7 @@ if PLAYER.health > Player::MAX_HEALTH {
 `impl` blocks can contain `macro_rules!` definitions that act as scoped method macros. Inside the macro body, `self` refers to the receiver the macro is called on:
 
 ```rust
-impl far Console {
+impl Console {
     macro_rules! print($fmt:literal, $($args:expr),*) {
         format!(__console_fmt_buf, $fmt, $($args),*);
         self.print(&__console_fmt_buf as far *u8);

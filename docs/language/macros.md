@@ -402,7 +402,7 @@ include!("hardware.r65")
 Macros can be defined inside `impl` blocks for structs, creating **method macros** that are scoped to that struct type. The macro body can use `self` to refer to the receiver:
 
 ```rust
-impl far Console {
+impl Console {
     macro_rules! print($fmt:literal, $($args:expr),*) {
         format!(__buf, $fmt, $($args),*);
         self.print(&__buf as far *u8);

@@ -178,7 +178,7 @@ Storage class is determined by mutability and attributes:
 | ROM | *(immutable static)* | Bank-dependent | 4-5 cycles |
 | Hardware | `#[hw(addr)]` | I/O addresses | 4-6 cycles |
 
-Immutable statics are placed in ROM automatically. Mutable statics require an explicit storage attribute:
+Immutable statics are placed in ROM automatically. A mutable static may declare a storage attribute; with none it defaults to auto-allocated `#[ram]`:
 
 ```rust
 static SINE_TABLE: [u8; 256] = [0; 256];   // Immutable = ROM

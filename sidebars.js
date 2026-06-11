@@ -23,6 +23,7 @@ const sidebars = {
         'language/enums',
         'language/structs',
         'language/traits',
+        'language/operator-overloading',
         'language/macros',
         'language/attributes',
         'language/lexical-structure',

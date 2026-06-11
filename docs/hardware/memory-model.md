@@ -81,7 +81,7 @@ static mut JOYPAD_STATE: u16;
 | Cycle cost | 4-5 cycles |
 | Long addressing | Requires 24-bit (far) pointers for bank $7E |
 
-The primary storage for arrays, buffers, and large game state:
+The primary storage for arrays, buffers, and large game state. A `static mut` with **no** storage attribute defaults here (auto-allocated `#[ram]`):
 
 ```rust
 #[ram]
@@ -89,6 +89,8 @@ static mut BUFFER: [u8; 4096];
 
 #[ram]
 static mut PLAYER: Player;
+
+static mut SCORE: u16;          // No attribute → auto-allocated RAM
 ```
 
 Variables in `#[ram]` are in bank `$7E`. Taking their address produces a far pointer.

@@ -32,7 +32,7 @@ Storage class attributes apply to `static mut` variables and determine where in 
 | `#[hw(addr)]` | Hardware I/O | 4–6 cycles |
 | `#[stack(lo, hi)]` | Reserved region | — |
 
-Every `static mut` must have exactly one storage attribute. The compiler rejects declarations that omit it.
+A `static mut` may carry at most one storage attribute. **With no attribute it defaults to auto-allocated `#[ram]`** — equivalent to writing `#[ram]` (taking its address yields a far pointer, and access uses long addressing). Add an explicit attribute when you want zeropage/lowram speed or a near pointer.
 
 ---
 

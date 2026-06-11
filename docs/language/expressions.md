@@ -212,7 +212,7 @@ let inv16: u16 = ~value16;
 
 ## Compound Assignment
 
-All arithmetic and bitwise operators support compound assignment forms. These desugar to `a = a op b` and inherit the restrictions of the base operator.
+All arithmetic and bitwise operators support compound assignment forms. On primitive types these behave like `a = a op b` and inherit the restrictions of the base operator. A `struct` can support them too by implementing the matching operator trait — see [Operator Overloading](operator-overloading.md).
 
 ```rust
 a += 5;         // a = a + 5
