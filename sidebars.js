@@ -24,6 +24,7 @@ const sidebars = {
         'language/structs',
         'language/traits',
         'language/operator-overloading',
+        'language/new_types',
         'language/macros',
         'language/attributes',
         'language/lexical-structure',

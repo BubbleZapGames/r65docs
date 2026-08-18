@@ -138,6 +138,8 @@ struct Player {
 
 Structs cannot be passed by value or directly assigned. Use pointers for indirection.
 
+A struct with a single *positional* field is a [newtype](./new_types.md) instead — a scalar, not an aggregate, passed by value in a register.
+
 ```rust
 #[ram]
 static mut PLAYER: Player;
@@ -317,7 +319,7 @@ Use `-> !` for the main game loop, reset handlers, or any function that intentio
 
 ### Type Aliases
 
-Type aliases create alternate names for existing types. They are fully transparent to the type checker.
+Type aliases create alternate names for existing types. They are fully transparent to the type checker. For a name the type checker keeps *distinct*, use a [newtype](./new_types.md).
 
 ```rust
 type Word = u16;

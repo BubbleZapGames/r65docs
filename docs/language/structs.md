@@ -8,6 +8,8 @@ description: "R65 struct definitions, memory layout, and usage."
 
 R65 structs group named fields into a single composite type, designed for minimal overhead and predictable memory layout on the 65816.
 
+For a struct with a single *positional* field — `struct TileId(u8);` — see [Newtypes](./new_types.md); that form is a scalar rather than an aggregate.
+
 ## Definition
 
 Structs group named fields into a single composite type. All fields are packed in declaration order with no padding or alignment.
