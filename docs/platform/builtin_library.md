@@ -269,6 +269,42 @@ static PALETTE: [u16; 4] = build_palette();
 
 **Note:** Values below 8 in any channel will map to 0 in the 5-bit output (since `7 >> 3 == 0`). This means the lowest 3 bits of each 8-bit channel are lost in the conversion.
 
+#### The `Color` Type (`sneslib.r65`)
+
+`fixed_color_bgr` is a *compile-time* builtin that produces a bare `u16`. For colors that exist at runtime, `sneslib.r65` defines a `Color` [newtype](../language/new_types.md) over `u16`, laid out the way CGRAM stores it (`0BBBBBGG GGGRRRRR`):
+
+```rust
+struct Color(u16);
+```
+
+A raw `u16` still flows in, so existing code keeps working; a `Color` will not flow back out without `.0` or `as`, which is what stops one being handed to something expecting a different kind of 16-bit number.
+
+| Name | Form | Description |
+|------|------|-------------|
+| `Color::BLACK` | associated const | `0x0000` |
+| `Color::WHITE` | associated const | `0x7FFF` |
+| `Color::rgb!(r, g, b)` | macro | Build from three 0–31 components |
+| `.red!()` `.green!()` `.blue!()` | method macros | Extract one component, 0–31 |
+
+```rust
+#[ram]
+static mut BACKDROP: Color;
+
+fn main() {
+    BACKDROP = Color::rgb!(31, 0, 0);   // all-constant: folds to a single LDA
+    BACKDROP = Color::WHITE;
+    BACKDROP = 0x7FFF;                  // a raw u16 still flows in
+
+    let r: u8 = BACKDROP.red!();
+    let raw: u16 = BACKDROP.0;
+
+    write_color!(Color::WHITE);
+    set_backdrop!(Color::rgb!(0, 0, 31));
+}
+```
+
+These are macros rather than methods on purpose: a constant `Color::rgb!` call costs nothing at all, where a by-value method would cost a call and a stack frame. `write_color!` and `set_backdrop!` accept either a `Color` or a raw `u16`.
+
 ---
 
 ## Generating Lookup Tables with `const fn`
