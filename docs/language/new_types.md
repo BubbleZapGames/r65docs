@@ -1,5 +1,5 @@
 ---
-sidebar_position: 11
+sidebar_position: 12
 title: "Newtypes"
 description: "R65 newtypes: nominal names for register-sized scalars, with by-value methods and zero runtime cost."
 ---
@@ -42,7 +42,7 @@ The payload must be a scalar that fits in a register.
 | `u8` `i8` `bool` | Structs and unions |
 | `u16` `i16` | Arrays |
 | Any enum | `far *T` (3 bytes) |
-| Any near pointer (`*T`) | Another newtype |
+| Any near pointer (`*T`), including a near `fn` pointer | Another newtype |
 
 ```rust
 struct Facing(Direction);    // enum payload — OK
@@ -105,6 +105,16 @@ let t = 300 as TileId;    // OK — `as` is the truncating spelling
 |------|----------|
 | `Newtype as T` | Unwrap to the payload (0 cycles) |
 | `T as Newtype` | Wrap, truncating if the payload is narrower |
+| `Newtype as Newtype` | Through the payloads, truncating if narrower |
+
+Both spellings are also **const-evaluable**, so a newtype works in a `const` or an array size:
+
+```rust
+const BLANK: TileId = TileId(5);
+const SHIFTED: TileId = 300 as TileId;   // truncates, like any cast
+```
+
+An associated constant keeps its nominal type when it is folded, so `Color::WHITE` comes back a `Color`, not a bare `u16`.
 
 ## Operators
 
@@ -129,6 +139,13 @@ let b: Ticks = 6;
 let c = a + b;
 // error: operator '+' has mismatched types 'Q10' and 'Ticks'
 //   hint: newtypes never mix; unwrap one side explicitly (e.g. 'Ticks(lhs.0 + rhs.0)')
+```
+
+That is the rule for values flowing *implicitly*. An `as` still converts between two newtypes, through the payloads, since `as` is the explicit escape hatch everywhere else in the language too:
+
+```rust
+let t: Ticks  = a as Ticks;     // OK: same payload, nothing to truncate
+let u: TileId = a as TileId;    // OK: the i16 payload truncates to u8
 ```
 
 Operators cannot yet be **overridden** — see [Current Limitations](#current-limitations).
@@ -176,6 +193,22 @@ match tile { 0 => { } }
 
 A `bool` payload is exhaustive with `true` and `false`; an enum payload with all its variants.
 
+### Conditions
+
+A condition consumes a value **as** a bool, which is the value flowing out -- the same rule that rejects `let b: bool = f;`. So a `bool` payload needs `.0` in `if`, `while`, `!`, `&&`, and `||`. A pattern is not a consumer, so a `match` on the wrapper needs no unwrap:
+
+```rust
+struct Flag(bool);
+
+match f { true => { }, false => { } };   // OK: the value stays a Flag
+if f.0 { }                               // OK: unwrapped for the condition
+
+if f { }
+// error: If condition must be boolean, found Flag
+//   hint: 'Flag' wraps a bool but does not flow out as one; unwrap it with
+//         '.0' (a 'match' on it needs no unwrap)
+```
+
 ## Methods
 
 Newtype methods take **bare `self`**, by value, bound to the accumulator. Associated functions (no `self`) work as usual.
@@ -211,7 +244,7 @@ Mutation is expressed by returning a new value. There is no in-place form.
 
 ### Rules for `self`
 
-**One self form per type.** A newtype always takes bare `self`; a struct or union always takes `*self`. Writing the other form is an error either way:
+**One self form per type.** A newtype always takes bare `self`; a struct or [union](./unions.md) always takes `*self`. Writing the other form is an error either way:
 
 ```rust
 impl TileId { fn raw(*self) -> u8 { return self.0; } }
@@ -282,7 +315,9 @@ Zero. Construction, `.0`, and `as` are all pure retypes that emit no instruction
 
 ## Current Limitations
 
-**Operators cannot be overridden.** A newtype inherits its payload's operators but cannot replace them. `struct Q10(i16)` therefore gets integer multiply, when its multiply is semantically `(a * b) >> 6` — which is why the standard library spells scaling multiply and divide as `a.mul(b)` and `a.div(b)`. The operator traits all take `*self`, which a newtype does not have.
+**Operators cannot be overridden.** A newtype inherits its payload's operators and cannot replace them. `struct Q10(i16)` therefore gets integer multiply, when its multiply is semantically `(a * b) >> 6` — which is why the standard library spells scaling multiply and divide as `a.mul(b)` and `a.div(b)`.
+
+Writing `impl MulAssign for Q10 { ... }` is accepted by the compiler but has **no effect**: `a *= b` still lowers to the inherited payload operator and never reaches the impl. Do not rely on it.
 
 **No far-pointer payload.** `struct Handle(far *Sprite);` is 3 bytes and does not fit the return-register budget.
 

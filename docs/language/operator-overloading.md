@@ -1,5 +1,5 @@
 ---
-sidebar_position: 10
+sidebar_position: 11
 title: "Operator Overloading"
 description: "Make your structs work with +=, ==, <, and the other operators, and copy them with Clone."
 ---

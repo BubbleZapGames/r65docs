@@ -116,8 +116,23 @@ x = 10;
 A = value;
 buffer[i] = 0;
 player.health = 100;
+entity.pos.x = 8;   // nested field chains fold to one constant offset
 *ptr = 5;
 ```
+
+**Aggregates are not copied by a bare `=`.** Assigning a whole struct, union, or array is an error that points at `Clone`:
+
+```rust
+PLAYER1 = PLAYER2;
+// type error: Cannot assign 'Player' by value
+//   structs and arrays are not copied by a bare '='
+//   Suggestion: use `dst = src.clone()` or `dst.clone_from(&src)`
+
+PLAYER1 = PLAYER2.clone();     // OK
+PLAYER1.clone_from(&PLAYER2);  // OK
+```
+
+A [newtype](./new_types.md) is a scalar, not an aggregate, so it copies with a plain `=` and needs no `impl Clone`.
 
 ### Compound Assignment
 
@@ -674,7 +689,26 @@ match scrutinee {
 - The trailing comma after the last arm is optional.
 - The match must be **exhaustive**: every possible value of the scrutinee must be covered by at least one pattern, or a wildcard/identifier pattern must be present.
 
-**Supported scrutinee types:** `u8`, `i8`, `u16`, `i16`, `bool`, enums.
+**Supported scrutinee types:** `u8`, `i8`, `u16`, `i16`, `bool`, enums, and [newtypes](./new_types.md) over any of those.
+
+A newtype is matched through its payload, so a newtype over `u8` needs a wildcard exactly as `u8` does, and the diagnostic names the newtype rather than the payload:
+
+```rust
+struct TileId(u8);
+
+let t: TileId = 3;
+match t { 0 => { }, 1 => { } };
+// type error: Non-exhaustive match on TileId: add a wildcard pattern '_' to cover remaining values
+```
+
+Anything else -- a pointer, struct, union, or array -- is rejected:
+
+```rust
+match ptr { 0 => { }, _ => { } };
+// type error: cannot match on *u8
+//   hint: match works on integers, bools, and enums; compare with '=='
+//         instead, or match on a field of the value
+```
 
 ### Pattern Types
 

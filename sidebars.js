@@ -22,6 +22,7 @@ const sidebars = {
         'language/match-expressions',
         'language/enums',
         'language/structs',
+        'language/unions',
         'language/traits',
         'language/operator-overloading',
         'language/new_types',

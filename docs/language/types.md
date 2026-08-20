@@ -133,10 +133,10 @@ struct Player {
 | Layout         | Packed, declaration order       |
 | Size           | Sum of all field sizes          |
 | Alignment      | None                            |
-| Methods        | None (use free functions)       |
+| Methods        | Inherent `impl` blocks, associated consts and functions |
 | Pass semantics | By reference only (use pointers) |
 
-Structs cannot be passed by value or directly assigned. Use pointers for indirection.
+Structs cannot be passed by value or copied with a bare `=`. Use pointers for indirection, and `.clone()` to copy -- see [Structs](./structs.md#pass-by-pointer-only).
 
 A struct with a single *positional* field is a [newtype](./new_types.md) instead — a scalar, not an aggregate, passed by value in a register.
 
@@ -149,6 +149,27 @@ PLAYER.health = 100;
 
 let p = Player { x: 10, y: 20, health: 100 };
 ```
+
+### Unions
+
+A union has the same field syntax as a struct, but every field sits at **offset 0** and the union's size is that of its largest field. There is no tag and no record of which field was written last.
+
+```rust
+union Pixel {
+    raw: u16,       // offset 0
+    bytes: [u8; 2], // offset 0
+}
+// Total size: 2 bytes
+```
+
+| Property       | Value                            |
+|----------------|----------------------------------|
+| Layout         | Every field at offset 0          |
+| Size           | Largest field                    |
+| Tag            | None                             |
+| Pass semantics | By reference only (use pointers) |
+
+Writing one field and reading another reinterprets the same bytes. See [Unions](./unions.md).
 
 ### Enums
 
@@ -341,7 +362,9 @@ let w: Word = 0x1234;     // Same as: let w: u16 = 0x1234;
 | `far fn()`        | 3 bytes |
 | `[T; N]`          | `N * sizeof(T)` |
 | struct            | Sum of field sizes |
+| union             | Largest field |
 | enum              | `u8` or `u16` (inferred) |
+| newtype           | Its payload's size (1 or 2 bytes) |
 
 ## Type Conversions
 
@@ -363,6 +386,9 @@ All type conversions require the explicit `as` keyword. There are no implicit co
 | `u16 as *T`        | Integer to pointer | 0 cycles     |
 | `far *T as u16`    | Truncate (drop bank) | 0 cycles   |
 | `Enum as u8`/`u16` | Enum to underlying integer | 0 cycles |
+| `Newtype as T`     | Unwrap to the payload | 0 cycles |
+| `T as Newtype`     | Wrap, truncating if the payload is narrower | 0 cycles |
+| `Newtype as Newtype` | Through the payloads, truncating if narrower | 0 cycles |
 
 ```rust
 let small: u8 = 42;
@@ -388,7 +414,22 @@ a = b;            // OK: truncates (programmer's responsibility)
 b = a as u16;     // Preferred: explicit cast makes intent clear
 ```
 
-Non-integer types (pointers, structs, enums) require exact type matches.
+Non-integer types (pointers, structs, unions, enums) require exact type matches.
+
+### Newtypes: Transparent In, Opaque Out
+
+A [newtype](./new_types.md) accepts its payload implicitly but never flows back out as one. Getting the payload out takes `.0` or an explicit `as`:
+
+```rust
+struct TileId(u8);
+
+let t: TileId = 5;      // OK: the payload flows in
+let n: u8 = t;          // error: a newtype does not flow out implicitly
+let n: u8 = t.0;        // OK
+let n: u8 = t as u8;    // OK
+```
+
+Two different newtypes never mix under an operator, even with identical payloads, though `as` still converts between them through the payloads.
 
 ### Implicit Integer Promotion
 

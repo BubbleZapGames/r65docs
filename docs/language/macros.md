@@ -1,5 +1,5 @@
 ---
-sidebar_position: 13
+sidebar_position: 14
 title: "Macros"
 description: "R65 macro system, fragment types, multiple arms, repetition, inline assembly, and built-in macros."
 ---
@@ -30,6 +30,13 @@ macro_rules! name {
 ```
 
 The shorthand is exactly a single-arm macro. See [Multiple Arms](#multiple-arms).
+
+Doc comments attach to a macro like any other declaration, at file scope and inside an `impl` block:
+
+```rust
+/// Clamps the receiver to the inclusive range [lo, hi].
+macro_rules! clamp($lo:expr, $hi:expr) { ... }
+```
 
 ### Invocation
 
@@ -211,6 +218,13 @@ $($x:expr),*     // Comma-separated
 // NOT Supported
 $($x:expr);*     // Semicolon-separated
 $($x:expr)*      // No separator
+```
+
+This governs only how a *repetition* is written. Splitting the **arguments** at a call site respects nesting: a comma inside a balanced `(...)`, `[...]`, or `{...}` group belongs to that group, not to the argument list.
+
+```rust
+twice!(add(1, 2));       // one argument: `add(1, 2)`
+twice!(arr[i], other);   // two arguments
 ```
 
 ## Multiple Arms
@@ -416,7 +430,49 @@ Invoke with dot notation and `!`:
 my_console.print!("Score: {u16}", score);
 ```
 
-When the macro is expanded, every `self` token in the body is replaced with the receiver expression (here, `my_console`). The result is then expanded as a normal macro. Method macros are only callable on instances of the struct they are defined on.
+### Expression Position
+
+A method macro whose body is a **block expression** produces a value and can be used wherever an expression is expected:
+
+```rust
+impl Color {
+    macro_rules! red() { { (self.0 & 0x1F) as u8 } }
+}
+
+let r: u8 = c.red!();              // as an initializer
+let bright: bool = c.red!() > 20;  // inside a larger expression
+```
+
+A macro whose body is a statement sequence has no value; using it in expression position names the macro in the error:
+
+```
+macro error: method macro 'move_by' does not produce a value, so it cannot be used here
+```
+
+`self` is substituted **textually**, so a body naming `self` twice evaluates the receiver twice. Pass a place, not a costly expression.
+
+### Associated Invocation: `Type::name!(args)`
+
+An `impl` macro whose body does not name `self` can be invoked on the **type**:
+
+```rust
+impl Color {
+    macro_rules! rgb($r:expr, $g:expr, $b:expr) {
+        { Color(((($b) & 0x1F) << 10) | ((($g) & 0x1F) << 5) | (($r) & 0x1F)) }
+    }
+}
+
+let red = Color::rgb!(31, 0, 0);   // all-constant args fold to a single LDA
+```
+
+Naming the type is exact -- it never falls back to the cross-`impl` search by name that an unresolvable receiver triggers. An unknown name lists what `impl Type` actually defines. A body that names `self` is rejected at the call site:
+
+```
+macro error: macro 'Color::red' names 'self', but an associated invocation has no receiver
+  hint: invoke it on a value instead: 'value.red!(...)'
+```
+
+When the macro is expanded, every `self` token in the body is replaced with the receiver expression (here, `my_console`). The result is then expanded as a normal macro.
 
 See [Structs — Method Macros](structs.md#method-macros) for more examples.
 

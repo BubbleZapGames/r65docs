@@ -365,6 +365,14 @@ fn safe_function(value @ A: u8) -> u8 {
 
 **Invalid registers for preservation:** `B` (shares hardware with A), `PBR` (read-only), `S` (stack pointer)
 
+`A` is valid only on a function that returns nothing (or is `-> !`, which never reaches its epilogue). The first return value travels in `A`, and the restore at exit would overwrite it:
+
+```rust
+#[preserves(A)]
+fn bad(value @ A: u8) -> u8 { return value; }
+// type error: A cannot be in #[preserves(...)] on a function that returns a value
+```
+
 ---
 
 ## Const Functions
@@ -415,9 +423,9 @@ fn dispatch(input @ A: u8) -> u8 {
 
 ---
 
-## Structs and Arrays as Parameters
+## Structs, Unions, and Arrays as Parameters
 
-Structs and arrays cannot be passed by value or returned by value. Use pointers instead.
+Structs, unions, and arrays cannot be passed by value or returned by value. Use pointers instead.
 
 ```rust
 struct Player { x: u8, y: u8, health: u16 }
@@ -437,6 +445,16 @@ fn get_player() -> *Player {
 ```
 
 This restriction makes memory access costs explicit.
+
+It does **not** apply to [newtypes](./new_types.md). A single-positional-field struct such as `struct TileId(u8);` is a scalar, not an aggregate, so it is passed and returned by value in a register like any `u8`:
+
+```rust
+struct TileId(u8);
+
+fn next(t @ A: TileId) -> TileId { return t + 1; }   // by value, in A
+```
+
+Newtype methods likewise take bare `self` by value, bound to `A`.
 
 ---
 

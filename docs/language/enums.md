@@ -1,5 +1,5 @@
 ---
-sidebar_position: 12
+sidebar_position: 13
 title: "Enums"
 description: "R65 enum definitions, representation, and usage."
 ---

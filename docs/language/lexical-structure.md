@@ -68,7 +68,24 @@ struct Player {
 }
 ```
 
-Valid attachment sites include `fn`, `static`, `const`, `struct`, `enum`, `trait`, and `impl` declarations.
+Valid attachment sites include `fn`, `static`, `const`, `struct`, `union`, `enum`, `trait`, and `impl` declarations, and also **struct fields**, **methods inside an `impl` block**, and **`macro_rules!` definitions** at file scope or inside an `impl`:
+
+```rust
+struct Player {
+    /// Horizontal position in tiles.
+    x: u8,
+    /// Vertical position in tiles.
+    y: u8,
+}
+
+impl Player {
+    /// Moves the player one tile east.
+    fn step_east(*self) { self.x = self.x + 1; }
+
+    /// Clamps the receiver to the inclusive range [lo, hi].
+    macro_rules! clamp($lo:expr, $hi:expr) { ... }
+}
+```
 
 **Inner doc comments** document the enclosing file and must appear **at the top of the file**, before any declarations:
 
@@ -94,14 +111,14 @@ Block form:
 
 - **Four or more slashes is not a doc comment.** `////` is a regular line comment (negative lookahead rejects a trailing `/`). Use this when you want a visual separator without attaching text to a declaration.
 - **`/**/` and `/***/` are regular block comments**, not doc comments — the block-doc grammar requires at least one content character between `/**` and `*/`.
-- **Dangling outer doc comments are an error.** If a `///` or `/** */` does not precede a declaration, parsing fails.
+- **Dangling outer doc comments are an error.** If a `///` or `/** */` does not precede a declaration, a field, a method, or a macro definition, parsing fails.
 - **Inner doc comments only at file scope.** `//!` and `/*! */` are not valid inside function bodies or declarations — they only attach to the program root.
 
 ## Keywords
 
 R65 reserves **57 keywords** organized into five categories. All keywords are case-sensitive and must be lowercase, with the sole exception of `Self`.
 
-### Implemented Keywords (26)
+### Implemented Keywords (27)
 
 These keywords are actively used in the grammar:
 
@@ -124,6 +141,7 @@ These keywords are actively used in the grammar:
 | `return` | Return from function |
 | `struct` | Structure definition |
 | `enum` | Enumeration definition |
+| `union` | Union definition (overlaid fields). Contextual -- `union` is still usable as an identifier |
 | `type` | Type alias |
 | `trait` | Trait definition |
 | `impl` | Inherent or trait implementation block (`impl Foo { ... }`, `impl Trait for Foo { ... }`) |
@@ -360,6 +378,7 @@ R65 uses the following operator and punctuation tokens:
 | `..` | Range (in `for` loops and `match`) |
 | `..=` | Inclusive range (in `match`) |
 | `(` `)` `{` `}` `[` `]` | Grouping/delimiters |
+| `::` | Path separator (`Type::CONST`, `Type::assoc_fn()`, `Type::name!()`) |
 | `;` `:` `,` `.` `#` `'` | Punctuation |
 
 ## Whitespace

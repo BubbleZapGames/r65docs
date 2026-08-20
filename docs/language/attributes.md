@@ -1,5 +1,5 @@
 ---
-sidebar_position: 14
+sidebar_position: 15
 title: Attributes
 description: Complete reference for R65 attributes — storage class, function behavior, interrupt handling, bank placement, and ROM configuration.
 ---
@@ -184,12 +184,27 @@ fn safe_update(value @ A: u8) -> u8 {
 
 **Invalid registers:** `B` (shares hardware with `A`), `PBR` (read-only), `S` (stack pointer)
 
+`A` is valid only on a function that returns nothing. The first return value travels in `A`, and the restore at exit would overwrite it with whatever `A` held on entry:
+
+```rust
+#[preserves(A)]
+fn bad(value @ A: u8) -> u8 { return value; }
+// type error: A cannot be in #[preserves(...)] on a function that returns a value
+//   The first return value is passed in A, and the restore at exit
+//   would overwrite it with the value A held on entry
+
+#[preserves(A)]
+fn fine() { X = 1; }        // OK: returns nothing
+```
+
+A `-> !` function may also preserve `A`, since it never reaches its epilogue.
+
 By default, all registers are caller-save. `#[preserves]` opts specific registers into callee-save behavior without affecting the rest of the calling convention.
 
 Multiple registers are listed as a comma-separated sequence:
 
 ```rust
-#[preserves(A, X, Y, D)]
+#[preserves(X, Y, D)]
 fn full_context_save(value @ A: u8) { ... }
 ```
 
@@ -363,7 +378,52 @@ Conditionally includes a declaration based on the build target or feature flags.
 static NTSC_CYCLES: u16 = 262;
 ```
 
-`#[cfg]` can be applied to functions, statics, and type definitions. Items whose condition is false are entirely omitted from the output — they are not type-checked or emitted.
+`#[cfg]` can be applied to functions, statics, type definitions, and **methods inside an `impl` block**. Items whose condition is false are entirely omitted from the output — they are not type-checked or emitted.
+
+```rust
+impl Q10 {
+    #[cfg(snes)]
+    far fn mul(self, other: Q10) -> Q10 { /* uses the hardware multiplier */ }
+}
+```
+
+---
+
+## `#[inline(...)]`
+
+Controls function inlining.
+
+| Form | Meaning |
+|------|---------|
+| `#[inline]` | Hint. Inlined if the body fits the size budget. |
+| `#[inline(always)]` | Directive. Inlined regardless of body size. |
+| `#[inline(never)]` | Directive. Never inlined. |
+
+```rust
+impl Q10 {
+    #[inline(always)]
+    far fn to_frac(self) -> i16 { return self.0 & Q10_FRAC_MASK; }
+}
+```
+
+Implicit inlining of unannotated functions happens only at `-O2`.
+
+---
+
+## `#[derive(...)]` — not supported
+
+R65 has no derive macros. The attribute is rejected with a per-trait suggestion of what to write by hand:
+
+```rust
+#[derive(Clone, PartialEq)]
+struct P { x: u8 }
+// error: #[derive(...)] is not supported in R65
+// hint: R65 has no derive macros; write these instead:
+//     Clone: impl Clone for P {}   // empty body = compiler-generated bitwise copy
+//     PartialEq: impl PartialEq for P { fn eq(*self, other: *P) -> bool { ... } }
+```
+
+`impl Clone for T {}` with an empty body is the one trait the compiler generates for you. See [Operator Overloading](./operator-overloading.md) for the rest.
 
 ---
 
@@ -380,7 +440,7 @@ static NTSC_CYCLES: u16 = 262;
 | `#[hw(addr)]` | `static mut` | Hardware I/O register (volatile) |
 | `#[stack(lo, hi)]` | *(standalone)* | Reserve stack region |
 | `#[entry]` | `fn` | Program entry point / reset vector |
-| `#[preserves(...)]` | `fn` | Callee-save registers |
+| `#[preserves(...)]` | `fn` | Callee-save registers (`A` only if nothing is returned) |
 | `#[interrupt(vector)]` | `fn` | Interrupt handler |
 | `#[interrupt(vector, preserve=false)]` | `fn` | Interrupt handler, manual save |
 | `#[bank(n)]` | `fn`, `static` | ROM bank placement |
@@ -390,3 +450,4 @@ static NTSC_CYCLES: u16 = 262;
 | `#[mode(databank=caller)]` | `far fn` | Caller manages DBR |
 | `#[snesrom(...)]` | `fn` | SNES ROM header configuration |
 | `#[cfg(target)]` | Any item | Conditional compilation |
+| `#[inline]` / `#[inline(always)]` / `#[inline(never)]` | `fn`, method | Inlining hint or directive |

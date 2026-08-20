@@ -23,6 +23,16 @@ struct Player {
 }
 ```
 
+Fields must be named. A struct body of **positional** fields is only valid with exactly one field, which makes it a [newtype](./new_types.md) rather than an aggregate:
+
+```rust
+struct TileId(u8);        // OK -- this is a newtype, not a struct
+
+struct Point(u8, u16);
+// error: a newtype wraps exactly one field
+//   hint: give each field a name: 'struct Point { field0: u8, field1: u16 }'
+```
+
 ## Memory Layout
 
 Structs use a **packed layout**: fields are stored contiguously in declaration order with no padding bytes. The total size is the sum of all field sizes.
@@ -91,6 +101,20 @@ if PLAYER.health > Player::MAX_HEALTH {
 }
 ```
 
+### Associated Functions
+
+A method that declares no `self` parameter is an **associated function**, called on the type:
+
+```rust
+impl Player {
+    fn spawn_hp() -> u8 { return 100; }
+}
+
+let hp: u8 = Player::spawn_hp();
+```
+
+No receiver is passed and none is synthesized, so it compiles to an ordinary free-function call. See [Traits -- Associated Functions](./traits.md#associated-functions).
+
 ### Method Macros
 
 `impl` blocks can contain `macro_rules!` definitions that act as scoped method macros. Inside the macro body, `self` refers to the receiver the macro is called on:
@@ -116,7 +140,21 @@ my_console.print!("Score: {u16}", score);
 my_console.println!("Level: {u8}", level);
 ```
 
-During expansion, `self` in the macro body is replaced with the receiver expression (`my_console` in this case), then the body is expanded as a regular macro. See [Macros](macros.md#method-macros) for more details.
+During expansion, `self` in the macro body is replaced with the receiver expression (`my_console` in this case), then the body is expanded as a regular macro.
+
+An `impl` macro whose body does **not** name `self` can be invoked on the type instead, as `Type::name!(args)`:
+
+```rust
+impl Color {
+    macro_rules! rgb($r:expr, $g:expr, $b:expr) {
+        { Color(((($b) & 0x1F) << 10) | ((($g) & 0x1F) << 5) | (($r) & 0x1F)) }
+    }
+}
+
+let red = Color::rgb!(31, 0, 0);
+```
+
+See [Macros](macros.md#method-macros) for more details.
 
 Trait implementations also use `impl` blocks — see [Traits](traits.md).
 
@@ -181,8 +219,11 @@ fn bad(player: Player) { }
 // ERROR: Cannot return struct by value
 fn bad_return() -> Player { }
 
-// ERROR: Cannot assign struct by value
+// ERROR: Cannot assign struct by value with a bare '='
 PLAYER1 = PLAYER2;
+// type error: Cannot assign 'Player' by value
+//   structs and arrays are not copied by a bare '='
+//   Suggestion: use `dst = src.clone()` or `dst.clone_from(&src)`
 ```
 
 Use pointers instead:
@@ -200,11 +241,17 @@ fn init_player(dest: *Player) {
     dest.health = 100;
 }
 
-// Copy field-by-field when needed
+// Copy the whole struct with Clone
+PLAYER1 = PLAYER2.clone();
+PLAYER1.clone_from(&PLAYER2);
+
+// Or copy field-by-field
 PLAYER1.x = PLAYER2.x;
 PLAYER1.y = PLAYER2.y;
 PLAYER1.health = PLAYER2.health;
 ```
+
+`.clone()` requires an `impl Clone for Player {}` -- an empty body is enough, and the compiler generates the bitwise copy. See [Operator Overloading](./operator-overloading.md#copying-with-clone).
 
 ## Struct Literal Initialization
 
@@ -237,7 +284,9 @@ ENTITY.pos.x = 10;
 
 ## TypeId Insertion
 
-When a struct implements any trait, the compiler automatically inserts a hidden `__type_id: u8` field at **offset 0**, shifting all declared fields by one byte. See [Traits](traits.md) for details.
+When a **struct** implements any trait, the compiler automatically inserts a hidden `__type_id: u8` field at **offset 0**, shifting all declared fields by one byte. See [Traits](traits.md) for details.
+
+This applies to structs only. A [newtype](./new_types.md) that implements a trait gets no TypeId byte -- every byte is payload, which is why a newtype cannot be a `*dyn` target. A [union](./unions.md) cannot implement a trait at all, for the same reason: offset 0 is field data.
 
 ```rust
 struct Player { x: u8, y: u8 }

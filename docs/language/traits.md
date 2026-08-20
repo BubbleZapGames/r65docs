@@ -1,5 +1,5 @@
 ---
-sidebar_position: 9
+sidebar_position: 10
 title: "Traits"
 description: "R65 trait definitions, implementations, and TypeId-based dynamic dispatch."
 ---
@@ -12,7 +12,7 @@ R65 traits provide TypeId-based dynamic dispatch for polymorphism. A struct that
 
 ### Syntax
 
-A trait declares a set of methods. All methods must take `*self` as the first parameter:
+A trait declares a set of methods. Methods take `*self` as the first parameter:
 
 ```rust
 trait Drawable {
@@ -22,6 +22,49 @@ trait Drawable {
 ```
 
 Methods can use any of the standard R65 parameter-passing mechanisms (register, stack, variable-bound) for their non-self parameters. Methods can return values.
+
+In an `impl`, the receiver form follows the **implementing type** rather than the trait declaration. A struct or union implements `fn draw(*self)` with `*self`; a [newtype](./new_types.md) implements the same declaration with bare `self`, because a newtype is a scalar with nothing to point at:
+
+```rust
+struct TileId(u8);
+
+impl Drawable for TileId {
+    fn draw(self, x @ X: u16, y @ Y: u16) { }   // bare self -- the newtype's form wins
+    fn get_width(self) -> u8 { return 8; }
+}
+```
+
+### Default Method Bodies
+
+A trait method may end in a body instead of `;`. The body is copied into every `impl` that omits the method, and an `impl` that provides its own definition overrides it:
+
+```rust
+trait Damageable {
+    fn hp(*self) -> u8;
+
+    fn is_dead(*self) -> bool {          // default body
+        return self.hp() == 0;
+    }
+}
+
+impl Damageable for Player {
+    fn hp(*self) -> u8 { return self.hp; }
+    // is_dead is inherited
+}
+
+impl Damageable for Enemy {
+    fn hp(*self) -> u8 { return self.hp; }
+    fn is_dead(*self) -> bool { return self.hp < 2; }   // overrides the default
+}
+```
+
+A defaulted method is indistinguishable from a hand-written one: same mangled `Struct__method` symbol, same ABI, same vtable slot. Inside the body, `self.field` and `self.method()` bind **statically** to the implementing struct, so those calls are direct `JSR`/`JSL` rather than dispatch.
+
+The cost is duplication -- the body is compiled once per implementor. N implementors means N copies of the code.
+
+:::note
+A default body declared with `*self` cannot be inherited by a [newtype](./new_types.md) implementor, which needs bare `self`. A newtype must supply its own definition of any defaulted method.
+:::
 
 ### Near Traits (Default)
 
@@ -83,9 +126,9 @@ impl Drawable for Player {
 
 ### Rules
 
-1. **All methods required**: Every method declared in the trait must be implemented. There are no default implementations.
+1. **Methods without a default body are required**: Every method declared with `;` must be implemented. Methods with a [default body](#default-method-bodies) may be omitted.
 2. **Exact signature match**: Method signatures in the `impl` block must match the trait definition exactly (same parameter types, bindings, and return type).
-3. **TypeId insertion**: The compiler automatically inserts a `__type_id: u8` field at offset 0 of the struct.
+3. **TypeId insertion**: The compiler automatically inserts a `__type_id: u8` field at offset 0 of the struct. Newtype implementors get no such field -- see [Newtypes and Traits](#newtypes-and-traits).
 
 ### Multiple Trait Implementation
 
@@ -421,6 +464,49 @@ impl Drawable for Player {
 }
 ```
 
+## Associated Functions
+
+An `impl` method that declares **no** `self` parameter is an associated function. It is called on the type, not on a value:
+
+```rust
+struct TileId(u8);
+
+impl TileId {
+    fn zero() -> TileId       { return TileId(0); }
+    fn of(n: u8) -> TileId    { return TileId(n); }
+}
+
+let t: TileId = TileId::zero();
+let u: TileId = TileId::of(7);
+```
+
+No receiver is passed and none is synthesized, so an associated function has the ABI of an ordinary free function -- the call is a plain `JSR`/`JSL` to the mangled `Type__name` symbol. This is how the standard library spells constructors, e.g. `Q10::from_int(100)`.
+
+Associated functions live in inherent `impl` blocks. They are not part of a trait's interface and are not dispatched through `*dyn`.
+
+## Newtypes and Traits
+
+A [newtype](./new_types.md) **may** implement a trait, but only for **static dispatch**. Two consequences follow from a newtype being all payload with no room for a TypeId byte:
+
+```rust
+// OK -- resolved at compile time
+impl Drawable for TileId {
+    fn draw(self, x @ X: u16, y @ Y: u16) { }
+}
+
+let d: far *dyn Drawable = &t as far *dyn Drawable;
+// error: cannot form a '*dyn Drawable' over newtype 'TileId'
+```
+
+- No TypeId field is inserted for a newtype, so `type_id()` and downcasting do not apply.
+- `impl Clone for TileId {}` is rejected as redundant -- a newtype copies with a plain assignment.
+
+In practice the two shapes rarely meet: a trait whose methods take `self` by value can only be implemented by a newtype, and one taking `*self` only by a struct or union, so a trait is naturally either dyn-able or newtype-able.
+
+## Unions and Traits
+
+A `union` may have inherent `impl` blocks, but **cannot implement a trait** -- dispatch stores a TypeId byte at offset 0, which is exactly where a union's field data lives. `impl Clone for MyUnion {}` is the one exception, since it is a bitwise copy of the union's size. See [Unions](./unions.md).
+
 ## TypeId Limits
 
 The maximum number of distinct struct types with trait implementations is 255 (TypeId 0 is reserved for null/invalid).
@@ -428,11 +514,11 @@ The maximum number of distinct struct types with trait implementations is 255 (T
 ## Limitations
 
 1. **No generics**: Traits cannot be parameterized with types.
-2. **No default implementations**: Every method must be implemented by every implementor.
+2. **No blanket impls**: A trait cannot be implemented for a whole category of types at once; write one `impl` per type.
 3. **No associated types**: Only associated constants are supported.
 4. **No trait bounds**: Function signatures cannot require trait implementations.
 5. **Near/far exclusivity**: A struct cannot implement both near and far traits.
-6. **No self by value**: All trait methods must take `*self` (a pointer).
+6. **Self by value is newtype-only**: Trait methods are declared with `*self`. Only a [newtype](./new_types.md) implementor substitutes bare `self`; a struct or union cannot.
 
 Supertraits (trait inheritance) **are** supported — see [Trait Inheritance](#trait-inheritance-supertraits).
 

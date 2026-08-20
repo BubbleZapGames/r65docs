@@ -8,7 +8,26 @@ description: R65 pattern matching with literal, enum, range, or, wildcard, and i
 
 `match` evaluates a scrutinee once and executes the first matching arm. The match must be **exhaustive**: every possible value must be covered.
 
-**Supported scrutinee types:** `u8`, `i8`, `u16`, `i16`, `bool`, enums.
+**Supported scrutinee types:** `u8`, `i8`, `u16`, `i16`, `bool`, enums, and [newtypes](./new_types.md) over any of those.
+
+A newtype is matched through its payload, so a newtype over `u8` needs a wildcard exactly as `u8` does, and the diagnostic names the newtype rather than the payload:
+
+```rust
+struct TileId(u8);
+
+let t: TileId = 3;
+match t { 0 => { }, 1 => { } };
+// type error: Non-exhaustive match on TileId: add a wildcard pattern '_' to cover remaining values
+```
+
+Anything else -- a pointer, struct, union, or array -- is rejected:
+
+```rust
+match ptr { 0 => { }, _ => { } };
+// type error: cannot match on *u8
+//   hint: match works on integers, bools, and enums; compare with '=='
+//         instead, or match on a field of the value
+```
 
 ```rust
 match scrutinee {
