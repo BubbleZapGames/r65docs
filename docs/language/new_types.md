@@ -335,17 +335,17 @@ const Q10_FRAC_MASK: i16 = 0x3F;      // plain i16: it selects bits, it is not a
 
 impl Q10 {
     #[inline(always)]
-    far fn from_int(n: i16) -> Q10 {
+    fn from_int(n: i16) -> Q10 {
         return Q10(n << 6);
     }
 
     #[inline(always)]
-    far fn from(n: i16, f: u8) -> Q10 {
+    fn from(n: i16, f: u8) -> Q10 {
         return Q10((n << 6) | ((f as i16) & Q10_FRAC_MASK));
     }
 
     #[inline(always)]
-    far fn to_int(self) -> i16 {
+    fn to_int(self) -> i16 {
         if self.0 < 0 {
             return 0 - (((0 - self.0) + 63) >> 6);
         }

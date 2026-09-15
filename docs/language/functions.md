@@ -16,7 +16,7 @@ fn name(parameters) -> ReturnType {
 }
 ```
 
-All functions are near (same-bank) by default. Use `far fn` for cross-bank calls. Functions without a return type annotation implicitly return `u8` via the A register.
+Free functions are near (same-bank) by default; use `far fn` for cross-bank calls. Methods in `impl` and `trait` blocks are the other way round — far by default, with `near fn` to opt out (see [Methods](#methods)). Functions without a return type annotation implicitly return `u8` via the A register.
 
 ```rust
 fn add_one(value @ A: u8) -> u8 {
@@ -283,8 +283,34 @@ far fn sound_engine() {
 | 0 | 1 | `far fn` | Yes |
 | 1 | 0 | `fn` | No -- compile error |
 | Any | Any | `far fn` | Yes |
+| Any | Any | method `fn` (far by default) | Yes |
+| 0 | 1 | method `near fn` | No -- compile error |
 
 Near functions use a 16-bit address and cannot cross bank boundaries. The compiler enforces this at compile time.
+
+### Methods
+
+A method — a `fn` inside an `impl` or `trait` block — is **far by default**. A type's methods get called from wherever the type is used, which in a multi-bank ROM means from any bank, so the default that needs no thought is the one that works everywhere. `near fn` opts a method back into JSR/RTS; `far fn` is accepted and means the same as the default.
+
+```rust
+impl Player {
+    fn heal(*self) { }          // far call (JSL/RTL), near self pointer
+    near fn tick(*self) { }     // near call (JSR/RTS), same bank only
+}
+
+trait Drawable { fn draw(*self); }          // far trait
+trait Ticker   { near fn tick(*self); }     // near trait
+```
+
+The calling convention and the self pointer are independent: `fn m(*self)` is a far call with a near self, `near fn m(far *self)` a near call with a far self.
+
+Rules:
+
+- A trait's methods must all be near or all be far (the dispatch wrapper is built per trait), and an impl method must match its trait's convention.
+- `near fn` on a method is an error in `#[bank(auto)]` mode.
+- Hand-written `asm!` that jumps to a method label must use `JSL`, not `JSR`, unless the method is `near fn`.
+
+**Cost.** The far default is free in practice for direct calls: at `-O1` and above the compiler demotes any far function whose direct callers all sit in its own bank back to `JSR`/`RTS`, so a same-bank program compiles to exactly what it did with near methods. What is *not* demoted is `*dyn` dispatch — a far trait's wrapper is a `JSL` plus a `JML` trampoline (~20–25 cycles) against ~10–12 for a near trait — so a trait dispatched in a hot loop should be declared with `near fn`. Inlining is likewise unaffected: a far method in the caller's bank inlines exactly as a near one would.
 
 ### Bank Placement
 
@@ -302,7 +328,7 @@ far fn audio_init() { }  // Also bank 1 (inherits)
 far fn auto_placed() { } // Compiler chooses bank
 ```
 
-In `#[bank(auto)]` mode, all functions must be `far fn` and all immutable statics must use `far static`.
+In `#[bank(auto)]` mode, all free functions must be `far fn` (methods already are by default) and all immutable statics must use `far static`.
 
 ---
 

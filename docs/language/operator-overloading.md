@@ -36,7 +36,7 @@ method takes `*self` plus one right-hand operand:
 
 ```rust
 impl AddAssign for I32 {
-    far fn add_assign(far *self, other: far *I32) {
+    fn add_assign(far *self, other: far *I32) {
         self.add(other);          // update the receiver in place
     }
 }
@@ -58,8 +58,8 @@ You only implement `eq` and `cmp` — `!=`, `<=`, `>`, and `>=` come for free.
 when equal, and a positive number when `self > rhs`.
 
 ```rust
-impl PartialEq  for I32 { far fn eq(far *self, other: far *I32) -> bool { return self.cmp(other) == 0; } }
-impl PartialOrd for I32 { far fn cmp(far *self, other: far *I32) -> i8  { /* ... */ } }
+impl PartialEq  for I32 { fn eq(far *self, other: far *I32) -> bool { return self.cmp(other) == 0; } }
+impl PartialOrd for I32 { fn cmp(far *self, other: far *I32) -> i8  { /* ... */ } }
 ```
 
 The result is an ordinary `bool`, so it composes with `&&`, `||`, `if`, and

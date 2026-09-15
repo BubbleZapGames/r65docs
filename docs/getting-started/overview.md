@@ -279,7 +279,7 @@ far fn graphics_update() {
 }
 ```
 
-Near functions (`fn`) use JSR/RTS and can only call within the same bank. Far functions (`far fn`) use JSL/RTL and are callable from anywhere.
+Near functions (`fn`) use JSR/RTS and can only call within the same bank. Far functions (`far fn`) use JSL/RTL and are callable from anywhere. Methods in `impl` and `trait` blocks are far by default; write `near fn` to opt one out. See [Functions](../language/functions.md#methods).
 
 ## Interrupt Handlers
 

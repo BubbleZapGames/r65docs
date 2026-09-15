@@ -66,37 +66,43 @@ The cost is duplication -- the body is compiled once per implementor. N implemen
 A default body declared with `*self` cannot be inherited by a [newtype](./new_types.md) implementor, which needs bare `self`. A newtype must supply its own definition of any defaulted method.
 :::
 
-### Near Traits (Default)
+### Far Traits (Default)
 
-By default, all methods in a trait use the near calling convention (JSR/RTS):
-
-```rust
-trait Updatable {
-    fn update(*self);
-    fn reset(*self);
-}
-```
-
-### Far Traits
-
-For cross-bank dispatch, declare all methods with `far fn`. Far traits use the JSL/RTL calling convention:
+Methods are far by default, so a trait written with plain `fn` uses the JSL/RTL calling convention and can be dispatched from any bank (`far fn` is accepted and means the same):
 
 ```rust
 trait Renderable {
-    far fn render(*self);
-    far fn get_bank(*self) -> u8;
+    fn render(*self);
+    fn get_bank(*self) -> u8;
 }
 ```
 
-### Near/Far Exclusivity
+### Near Traits
 
-A trait must be **entirely near or entirely far**. Mixing near and far methods within a single trait is a compile error:
+`near fn` opts a trait into the JSR/RTS convention. Its `*dyn` dispatch costs roughly half a far trait's (~10–12 cycles vs ~20–25: no `JML` trampoline), so a trait dispatched in a hot loop wants this — at the price of every implementor and caller living in one bank:
 
 ```rust
-// ERROR: Cannot mix near and far methods in a trait
+trait Updatable {
+    near fn update(*self);
+    near fn reset(*self);
+}
+```
+
+Direct (non-`*dyn`) calls do not pay for the far default: at `-O1` and above a far method whose callers are all in its bank is demoted to `JSR`/`RTS`. Only dispatch keeps the `JSL`, because the wrapper's trampoline needs an `RTL` at the other end.
+
+### Near/Far Exclusivity
+
+A trait must be **entirely near or entirely far** — the dispatch wrapper is built once per trait. Mixing within a trait, or an impl method that disagrees with its trait, is a compile error:
+
+```rust
+// ERROR: trait 'Invalid' mixes near and far methods
 trait Invalid {
-    fn near_method(*self);
-    far fn far_method(*self);  // Compile error
+    fn far_method(*self);          // far (default)
+    near fn near_method(*self);    // Compile error
+}
+
+impl Renderable for Sprite {
+    near fn render(*self) { }      // ERROR: trait declares it far
 }
 ```
 
@@ -157,8 +163,8 @@ impl Updatable for Enemy {
 A struct cannot implement both near and far traits:
 
 ```rust
-trait NearTrait { fn method(*self); }
-trait FarTrait { far fn method(*self); }
+trait NearTrait { near fn method(*self); }
+trait FarTrait { fn method(*self); }
 
 struct MyStruct { data: u8 }
 

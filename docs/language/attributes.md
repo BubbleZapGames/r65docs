@@ -281,8 +281,8 @@ far fn flexible() { }       // Compiler chooses bank
 
 **Rules:**
 - Near functions (`fn`) must be in the same bank as their callers. The compiler rejects cross-bank near calls.
-- Far functions (`far fn`) are callable from any bank.
-- In `#[bank(auto)]` mode, all functions must be `far fn` and all statics must be `far static`.
+- Far functions (`far fn`) are callable from any bank. Methods in `impl`/`trait` blocks are far by default; `near fn` opts out (see [Functions](functions.md#methods)).
+- In `#[bank(auto)]` mode, all free functions must be `far fn`, methods must not be `near fn`, and all statics must be `far static`.
 
 ---
 
@@ -383,7 +383,7 @@ static NTSC_CYCLES: u16 = 262;
 ```rust
 impl Q10 {
     #[cfg(snes)]
-    far fn mul(self, other: Q10) -> Q10 { /* uses the hardware multiplier */ }
+    fn mul(self, other: Q10) -> Q10 { /* uses the hardware multiplier */ }
 }
 ```
 
@@ -402,7 +402,7 @@ Controls function inlining.
 ```rust
 impl Q10 {
     #[inline(always)]
-    far fn to_frac(self) -> i16 { return self.0 & Q10_FRAC_MASK; }
+    fn to_frac(self) -> i16 { return self.0 & Q10_FRAC_MASK; }
 }
 ```
 

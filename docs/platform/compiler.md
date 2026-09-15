@@ -118,9 +118,9 @@ Enables all MIR-level and assembly-level passes. This is the recommended level f
 
 **Dead code elimination** uses liveness analysis to remove unreachable basic blocks and instructions that write to values never read.
 
-**Far-to-near call optimization** converts `far fn` calls (JSL/RTL, 4 bytes, 8 cycles) to near calls (JSR/RTS, 3 bytes, 6 cycles) when the caller and callee are in the same bank, the function address is never taken, and the function is not an interrupt handler. Saves 1 byte and 2 cycles per call site.
+**Far-to-near call optimization** converts `far fn` calls (JSL/RTL, 4 bytes, 8 cycles) to near calls (JSR/RTS, 3 bytes, 6 cycles) when the caller and callee are in the same bank, the function address is never taken, the function is not an interrupt handler, and it is not a `*dyn` dispatch target. Saves 1 byte and 2 cycles per call site. Since methods are far by default, this is what keeps same-bank method calls at `JSR`/`RTS`.
 
-**Function inlining** at `-O1` only inlines functions explicitly marked with `#[inline]` or `#[inline(always)]`, and only if they have fewer than 30 MIR instructions. Functions are never inlined if they are recursive, far, interrupt handlers, entry points, or contain inline assembly (`asm!()`). Functions marked `#[inline(never)]` are always respected.
+**Function inlining** at `-O1` only inlines functions explicitly marked with `#[inline]` or `#[inline(always)]`, and only if they have fewer than 30 MIR instructions. Functions are never inlined if they are recursive, interrupt handlers, entry points, or contain inline assembly (`asm!()`); a far function is inlined into a caller in another bank only when its body is provably bank-independent. Functions marked `#[inline(never)]` are always respected.
 
 #### Assembly-level peephole passes
 
