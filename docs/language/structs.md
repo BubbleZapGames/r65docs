@@ -47,6 +47,32 @@ struct Player { x: u8, y: u8, health: u16 }
 
 There are no alignment requirements. A `u16` field at an odd offset is valid and incurs no penalty on the 65816 (which has no alignment constraints).
 
+### Structure-of-Arrays Layout with `#[soa]`
+
+Packed layout has one cost that matters for entity pools: indexing an array of structs scales the index by the element size on every access. Marking a struct [`#[soa]`](./attributes.md#soa) changes how its *statics* are stored — every array of it becomes one array per field, so `POOL[i].hp` indexes a plane of `hp` values with no multiply:
+
+```rust
+#[soa]
+struct Enemy { kind: u8, x: u16, hp: u8 }
+
+#[lowram]
+static mut POOL: [Enemy; 16];   // POOL__kind: [u8; 16], POOL__x: [u16; 16], POOL__hp: [u8; 16]
+
+POOL[i].hp = 100;               // same syntax, one indexed store
+```
+
+The trade is that an element no longer has an address: `&POOL[i]`, locals and parameters of the type, whole-element copies, and `impl Clone` are all rejected, and methods take `self` as the element *index* rather than a pointer:
+
+```rust
+impl Enemy {
+    fn step(self) { self.x = self.x + 1; }   // self is the index into POOL
+}
+
+POOL[i].step();
+```
+
+A `#[soa]` struct backs exactly one static, and a single instance (`static mut PLAYER: Player;`) is treated as a one-element pool. See the [`#[soa]` reference](./attributes.md#soa) for the full layout and restriction rules.
+
 ## Methods and Impl Blocks
 
 Structs can have methods defined in `impl` blocks. Methods receive `*self` (a pointer to the struct instance) as their first parameter:
@@ -75,15 +101,21 @@ PLAYER.take_damage(5);    // Compiler passes &PLAYER as self
 let x = PLAYER.get_x();
 ```
 
-A method's `self` pointer drives whether it is near or far — write `*self` for a near method, or `far *self` for one that operates on far pointers. There is no impl-level qualifier:
+Two independent choices are made per method, with no impl-level qualifier. The `self` pointer is near (`*self`) or far (`far *self`) depending on which kind of pointer the method operates on; the call itself is far by default, with `near fn` opting a method into a same-bank call — see [Functions](./functions.md#methods):
 
 ```rust
 impl Player {
-    fn update(far *self) {          // far self
+    fn update(far *self) {          // far self pointer, far call
         self.health = self.health - 1;
+    }
+
+    near fn tick(*self) {           // near self pointer, near call
+        self.y = self.y + 1;
     }
 }
 ```
+
+An [`#[soa]`](#structure-of-arrays-layout-with-soa) struct's methods take bare `self` instead — the element index.
 
 Under the hood, methods are mangled to free functions (e.g., `Player__take_damage`) with self as the first stack-passed argument.
 
@@ -333,3 +365,4 @@ fn heal(amount @ A: Health) -> Health {
 | Enum (any value > 255) | 2 bytes |
 | Struct | Sum of field sizes |
 | Array `[T; N]` | `N * sizeof(T)` |
+| Array of an `#[soa]` struct | Same total, stored as one array per field (3- and 7-byte fields padded to 4 and 8) |

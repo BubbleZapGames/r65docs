@@ -1,7 +1,7 @@
 ---
 sidebar_position: 15
 title: Attributes
-description: Complete reference for R65 attributes — storage class, function behavior, interrupt handling, bank placement, and ROM configuration.
+description: Complete reference for R65 attributes — storage class, function behavior, interrupt handling, bank placement, struct layout, and ROM configuration.
 ---
 
 # Attributes
@@ -410,6 +410,83 @@ Implicit inlining of unannotated functions happens only at `-O2`.
 
 ---
 
+## `#[soa]`
+
+Lays every static of a **struct** out as one array per field — a *structure of arrays* — instead of one array of packed elements. The attribute goes on the struct declaration; every static of that struct is then SoA, whatever its storage class:
+
+```rust
+#[soa]
+struct Enemy { kind: u8, x: u16, hp: u8 }
+
+#[lowram]
+static mut POOL: [Enemy; 16];
+//  -> POOL__kind: [u8; 16]
+//  -> POOL__x:    [u16; 16]
+//  -> POOL__hp:   [u8; 16]
+```
+
+The compiler synthesizes one static per top-level field, in declaration order, each inheriting the parent's storage attribute, bank, and mutability. The parent itself occupies no bytes.
+
+**Why.** Indexing an array of structs scales the index by the element size on every access — cheap for a power-of-two stride, but around 57 cycles for an element over 16 bytes. In a field plane the index scales by the *field* size instead, so `POOL[i].hp` addresses `POOL__hp[i]` with no multiply at all. This is the layout hand-written 6502 code has always used for entity pools; `#[soa]` lets you keep the struct syntax.
+
+**Access is unchanged** from the array-of-structs form:
+
+```rust
+POOL[i].hp = 100;
+let k: u8 = POOL[i].kind;
+POOL[i].hp += 1;              // compound assignment
+POOL[i].pos.y = 8;            // nested aggregate fields
+```
+
+Index a pool with a `u16`. A `u8` index needs an explicit `as u16` — `POOL[i as u16].hp` — until implicit widening is fixed.
+
+**A single instance** is a pool of one. `static mut PLAYER: Player;` over an `#[soa]` struct gets one one-element plane per field, and `PLAYER.hp` is `PLAYER[0].hp`.
+
+**Methods take `self` as the element index**, by value, so a field access inside a method is a single indexed instruction — no pointer, no stack frame:
+
+```rust
+impl Enemy {
+    fn step(self) { self.x = self.x + 1; self.hp -= 1; }
+    fn hurt(self, amount @ Y: u16) { self.hp = self.hp - (amount as u8); }
+}
+
+POOL[i].step();               // passes the index
+```
+
+`self` is an ordinary `u16`, so `if self == 0`, `other_fn(self)`, and `POOL[self].kind` all work. `*self` on an `#[soa]` method is an error — there is no address to take — and a trait declared with `*self` is still implemented with bare `self`, the same rule [newtypes](./new_types.md) follow. Because `self` holds the index for the whole body, an `#[soa]` method may not bind a parameter to `X`.
+
+**Layout.** A field plane's stride is the field's size, except that a 3- or 7-byte field (a `far *T`, for instance) is padded to 4 or 8 — one byte per element buys a power-of-two scale. Auto-allocated planes are placed by the normal allocator and may not be adjacent; an explicitly addressed static lays its planes out consecutively from that address, so the memory map stays writable by hand:
+
+```rust
+#[soa]
+struct Enemy { kind: u8, x: u16, hp: u8 }
+
+#[zeropage(0x40)]
+static mut POOL: [Enemy; 8];
+//  -> POOL__kind at $40 (8 bytes), POOL__x at $48 (16), POOL__hp at $58 (8)
+```
+
+**Composes with** `#[zeropage]`, `#[lowram]`, `#[ram]`, and `#[bank(n)]` on the static. Does not compose with `#[hw]` or `extern static`.
+
+**Restrictions.** An element has no contiguous base address, so anything that needs one is rejected:
+
+| Construct | Write instead |
+|-----------|---------------|
+| `&POOL[i]`, `&POOL` | Pass the index |
+| a local, parameter, or plain-struct field of the type | Hold a `u16` index |
+| `E = POOL[i]` (whole-element copy), `impl Clone` | Copy the fields |
+| `fn m(*self)` | `fn m(self)` |
+| a second static of the type | Merge the pools — methods hard-code one pool's planes |
+| `#[soa]` on a union or a newtype | — |
+| an initializer on the static | Assign at runtime (transposing a literal is not implemented yet) |
+| `*dyn Trait` over an element | Static dispatch only |
+
+Trait impls with static dispatch, methods with arguments, and methods calling other methods on `self` all work. A field may be a [tagged enum](./enums.md#a-field-of-an-soa-struct), which contributes its own tag and payload planes, and an `#[soa]` struct may itself be a tagged enum's [payload](./enums.md#soa-payloads).
+
+`asm!` bodies cannot see the layout — name a field plane (`POOL__hp`) rather than `POOL`. `size_of(Enemy)` still returns the packed sum, which is no longer a stride.
+
+---
+
 ## `#[derive(...)]` — not supported
 
 R65 has no derive macros. The attribute is rejected with a per-trait suggestion of what to write by hand:
@@ -451,3 +528,4 @@ struct P { x: u8 }
 | `#[snesrom(...)]` | `fn` | SNES ROM header configuration |
 | `#[cfg(target)]` | Any item | Conditional compilation |
 | `#[inline]` / `#[inline(always)]` / `#[inline(never)]` | `fn`, method | Inlining hint or directive |
+| `#[soa]` | `struct` | Store every static of the struct as one array per field |

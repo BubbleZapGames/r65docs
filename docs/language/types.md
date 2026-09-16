@@ -115,6 +115,18 @@ Arrays cannot be passed by value to functions. Pass a pointer instead.
 
 Dynamic array access which is out-of-bounds is undefined behavior. The compiler performs no runtime checks.
 
+**Arrays of `#[soa]` structs** are the one exception to the packed layout. A struct marked [`#[soa]`](./attributes.md#soa) stores every array of it as one array *per field*, so `POOL[i].hp` indexes a `[u8; N]` plane of `hp` values rather than scaling `i` by the element size. The syntax is unchanged; what changes is that an element has no contiguous address, so `&POOL[i]` and whole-element copies are rejected. Arrays of [tagged enums](./enums.md#storage-two-planes) are stored the same way, as a tag plane and a payload plane.
+
+```rust
+#[soa]
+struct Enemy { kind: u8, hp: u8 }
+
+#[lowram]
+static mut POOL: [Enemy; 16];   // POOL__kind: [u8; 16], POOL__hp: [u8; 16]
+
+POOL[i].hp = 100;               // indexes the hp plane directly
+```
+
 ### Structs
 
 Structs are packed aggregates with fields laid out in declaration order. No padding is inserted between fields.
@@ -173,7 +185,7 @@ Writing one field and reading another reinterprets the same bytes. See [Unions](
 
 ### Enums
 
-C-style enums with explicit or auto-incrementing discriminant values. No data-carrying variants.
+Fieldless enums are C-style: named integer constants with explicit or auto-incrementing discriminants. A variant may instead carry a declared struct as its payload, making the enum a [tagged enum](./enums.md#tagged-enums).
 
 ```rust
 enum Direction {
@@ -188,7 +200,8 @@ enum Direction {
 |------------------|-----------------------------------------------------|
 | Representation   | Smallest integer type that fits all discriminants    |
 | Size             | `u8` if all values fit in 0..255, otherwise `u16`   |
-| Data variants    | Not supported                                       |
+| Methods          | Inherent `impl` blocks; `self` is the discriminant   |
+| Data variants    | A declared struct per variant, stored as tag and payload planes — see [Enums](./enums.md#tagged-enums) |
 
 Enums can be cast to their underlying integer type with `as`:
 
