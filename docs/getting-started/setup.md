@@ -72,13 +72,13 @@ wlalink         # Should print usage info
 
 ## Step 3: Install R65
 
-Clone the repository and install in development mode:
+Install the `release` branch from GitHub with pip:
 
 ```bash
-pip install https://github.com/BubbleZapGames/R65.git@release
+pip install git+https://github.com/BubbleZapGames/R65.git@release
 ```
 
-This installs three command-line tools:
+This installs two command-line tools:
 
 | Command | Purpose |
 |---------|---------|
@@ -120,34 +120,49 @@ my_game/
 │       ├── sneslib.r65
 │       ├── math.r65
 │       └── ...
-├── build/                  # Compiled output (created on first build)
-├── Makefile                # Build system
+├── build/                  # Compiled output
+├── Makefile                # Build system (passes --cfg snes)
+├── r65-lint.toml           # Linter configuration
+├── CLAUDE.md               # Language notes for AI assistants
+├── .gitattributes
 └── README.md
 ```
 
-The generated `main.r65` is a minimal SNES program:
+The generated `main.r65` is a minimal SNES program. `init_reset()` is the reset entry point; it initializes the hardware and hands off to `main()`, which waits for each VBlank:
 
 ```rust
+// my_game - Main entry point
+// SNES LoROM template project
+
 #[snesrom(name="MY_GAME")]
 
+#[stack(0x0100, 0x01FF)]
+
+// Include standard libraries
 include!("lib/65816.r65")
 include!("lib/sneslib.r65")
 include!("lib/math.r65")
 
+// Bank 0 - Main code
 #[bank(0)]
 
+// Initialization handler runs at power-on, does setup then hands off to main()
+#[entry]
+fn init_reset() -> ! {
+    snes_init();
+    main();
+}
+
+// NMI handler — called every VBlank. Put PPU/DMA traffic here
 #[interrupt(nmi)]
 fn nmi_handler() {
     clear_nmi!()
 }
 
-#[entry]
+// Game loop: runs forever after init_reset() hands off. Edit this.
 fn main() -> ! {
-    snes_init();
-    INIDISP = 0x0;
-
     loop {
-
+        wait_nmi!();
     }
 }
 ```

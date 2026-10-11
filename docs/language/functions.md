@@ -16,7 +16,7 @@ fn name(parameters) -> ReturnType {
 }
 ```
 
-Free functions are near (same-bank) by default; use `far fn` for cross-bank calls. Methods in `impl` and `trait` blocks are the other way round — far by default, with `near fn` to opt out (see [Methods](#methods)). Functions without a return type annotation implicitly return `u8` via the A register.
+Free functions are near (same-bank) by default; use `far fn` for cross-bank calls. Methods in `impl` and `trait` blocks are the other way round — far by default, with `near fn` to opt out (see [Methods](#methods)). A function without a return type annotation returns nothing.
 
 ```rust
 fn add_one(value @ A: u8) -> u8 {
@@ -54,7 +54,7 @@ fn bad(value @ A: u8, count: u8) { }  // compile error
 
 **Syntax:** `param: Type`
 
-Stack parameters are pushed by the caller in right-to-left order and cleaned up by the callee. They support recursion and have no limit on count.
+Stack parameters are pushed by the caller in right-to-left order and cleaned up by the caller after the call. They support recursion and have no limit on count.
 
 ```rust
 fn add(a: u8, b: u8) -> u8 {
@@ -203,23 +203,23 @@ let quotient, remainder = divide(100, 7);
 
 ### Return Signature Consistency
 
-All return paths in a function must return the same registers and variables in the same order. The compiler enforces this.
+Every `return` must supply one value per type in the declared return list, each of that type. The registers follow from the types (see [Multiple Return Values](#multiple-return-values)), so all paths return in the same registers by construction.
 
 ```rust
-// Valid: all paths return A, X
+// Valid: every path returns (u8, u16)
 fn branch(flag: u8) -> u8, u16 {
     if flag != 0 {
-        return A, X;
+        return 1, 2;
     }
-    return A, X;
+    return 3, 4;
 }
 
-// Invalid: mismatched return signatures
-fn bad(flag: u8) -> u8 {
+// Invalid: one path returns a single value
+fn bad(flag: u8) -> u8, u16 {
     if flag != 0 {
-        return A;       // signature: (A)
+        return 1, 2;
     }
-    return X;           // signature: (X) -- compile error
+    return 3;           // error: returning 1 value from a function declared '-> u8, u16'
 }
 ```
 
@@ -243,7 +243,7 @@ fn fatal_error() -> ! {
 }
 ```
 
-A function declared `-> !` that can actually return is a compile error.
+If control can reach the end of a `-> !` function, or a `return` in it, the compiler emits a branch-to-self halt loop there instead of a return.
 
 ---
 
@@ -308,9 +308,9 @@ Rules:
 
 - A trait's methods must all be near or all be far (the dispatch wrapper is built per trait), and an impl method must match its trait's convention.
 - `near fn` on a method is an error in `#[bank(auto)]` mode.
-- Hand-written `asm!` that jumps to a method label must use `JSL`, not `JSR`, unless the method is `near fn`.
+- A method called from hand-written `asm!` should be declared `near fn` and called with `JSR`. The compiler cannot see calls inside `asm!`, so it does not account for them when choosing a method's calling convention.
 
-**Cost.** The far default is free in practice for direct calls: at `-O1` and above the compiler demotes any far function whose direct callers all sit in its own bank back to `JSR`/`RTS`, so a same-bank program compiles to exactly what it did with near methods. What is *not* demoted is `*dyn` dispatch — a far trait's wrapper is a `JSL` plus a `JML` trampoline (~20–25 cycles) against ~10–12 for a near trait — so a trait dispatched in a hot loop should be declared with `near fn`. Inlining is likewise unaffected: a far method in the caller's bank inlines exactly as a near one would.
+**Cost.** The far default is free in practice for direct calls: at `-O1` and above the compiler demotes any far function whose direct callers all sit in its own bank back to `JSR`/`RTS`, so a same-bank program compiles to exactly what it did with near methods. What is *not* demoted is `*dyn` dispatch — a far trait's wrapper is a `JSL` plus a `JML` trampoline (~20–25 cycles) against ~10–12 for a near trait — so a trait dispatched in a hot loop should be declared with `near fn`. Inlining is likewise unaffected: a far method in the caller's bank inlines exactly as a near one would. (Trait-impl methods are never inlined.)
 
 ### Bank Placement
 
@@ -437,7 +437,7 @@ Function pointers store the address of a function for indirect calls.
 | `far fn(u8) -> u8` | Far (any bank) | 24-bit |
 
 ```rust
-type Callback = fn(value @ A: u8) -> u8;
+type Callback = fn(u8) -> u8;
 
 #[ram]
 static mut HANDLER: Callback;

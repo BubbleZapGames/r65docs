@@ -250,8 +250,8 @@ In the R65 source, reference the converted assets:
 
 ```rust
 // Include raw CHR data
-static SPRITES = include_bytes!("sprites.chr");
+static SPRITES = include_bytes!("../build/sprites.chr");
 
 // Include compressed data (decompress at runtime)
-static BG_TILES_LZ4 = include_bytes!("bg.lz4");
+static BG_TILES_LZ4 = include_bytes!("../build/bg.lz4");
 ```

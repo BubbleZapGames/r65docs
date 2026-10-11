@@ -134,7 +134,7 @@ declare_buffer!(SPRITE_DATA, u16, 128);
 
 ### `reg` -- Hardware Registers
 
-Matches hardware register names: `A`, `X`, or `Y`.
+Matches a hardware register name: `A`, `B`, `X`, `Y`, `D`, `S`, `STATUS`, `DBR`, or `PBR`.
 
 ```rust
 macro_rules! save_and_clear($reg:reg) {

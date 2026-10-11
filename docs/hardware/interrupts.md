@@ -35,38 +35,12 @@ fn timer_handler() {
 
 Interrupts can fire while the processor is in any mode (m8 or m16). The compiler automatically:
 
-1. Saves the processor STATUS register (including mode bits) via `PHP`
-2. Forces 16-bit accumulator (`REP #$20`) to save the full 16-bit A (including hidden B byte)
-3. Saves all registers (A, X, Y, D, DBR)
-4. Sets default mode (m8, x16) for the handler body
-5. Restores all registers in reverse order on exit
-6. Restores the original STATUS via `PLP` (which restores the interrupted code's mode)
-7. Returns via `RTI`
+1. Saves the registers the handler body modifies, out of A, X, Y, D, and DBR. A body that calls a function or uses `asm!` is assumed to modify all of them. A is always saved at full 16-bit width, so its hidden high byte (B) survives.
+2. Sets the default mode (m8, x16) for the handler body.
+3. Restores the saved registers in reverse order on exit.
+4. Returns via `RTI`.
 
-### Generated Assembly
-
-```asm
-nmi_handler:
-    PHP                 ; Save STATUS (before mode change)
-    REP #$20            ; Force 16-bit A to save full accumulator
-    PHA                 ; Save A (full 16-bit, includes hidden B byte)
-    PHX                 ; Save X
-    PHY                 ; Save Y
-    PHD                 ; Save Direct Page
-    PHB                 ; Save Data Bank Register
-    SEP #$20            ; Set m8 mode for handler body
-
-    ; --- handler body runs here in m8/x16 mode ---
-
-    PLB                 ; Restore DBR
-    PLD                 ; Restore D
-    PLY                 ; Restore Y
-    PLX                 ; Restore X
-    REP #$20            ; 16-bit A for full restore
-    PLA                 ; Restore A (full 16-bit)
-    PLP                 ; Restore STATUS (restores original mode)
-    RTI                 ; Return from interrupt
-```
+No `PHP`/`PLP` is needed: the CPU pushes the status register when the interrupt is taken, and `RTI` pulls it back — including the m/x mode bits — so the interrupted code resumes in its own mode.
 
 ## Restrictions
 
@@ -85,7 +59,7 @@ fn bad_handler() -> u8 {  // Compile error
 
 ## Preservation Control
 
-By default, all registers are automatically preserved. Use `preserve=false` for manual control:
+By default, every register the body modifies is automatically preserved. Use `preserve=false` to take over register saving yourself:
 
 ```rust
 #[interrupt(irq, preserve=false)]
@@ -94,9 +68,10 @@ fn minimal_handler() {
     asm!("PHA");
     process();
     asm!("PLA");
-    // Must manually issue RTI
 }
 ```
+
+The compiler still ends the handler with `RTI`; do not issue one yourself.
 
 ## Never-Returning Handlers
 

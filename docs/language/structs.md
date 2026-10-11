@@ -316,9 +316,9 @@ ENTITY.pos.x = 10;
 
 ## TypeId Insertion
 
-When a **struct** implements any trait, the compiler automatically inserts a hidden `__type_id: u8` field at **offset 0**, shifting all declared fields by one byte. See [Traits](traits.md) for details.
+When a plain **struct** implements any trait, the compiler automatically inserts a hidden `__type_id: u8` field at **offset 0**, shifting all declared fields by one byte. See [Traits](traits.md) for details.
 
-This applies to structs only. A [newtype](./new_types.md) that implements a trait gets no TypeId byte -- every byte is payload, which is why a newtype cannot be a `*dyn` target. A [union](./unions.md) cannot implement a trait at all, for the same reason: offset 0 is field data.
+This applies to plain structs only. An [`#[soa]` struct](./attributes.md#soa) has no contiguous element to put it in, and a [newtype](./new_types.md) that implements a trait gets no TypeId byte -- every byte is payload, which is why a newtype cannot be a `*dyn` target. A [union](./unions.md) cannot implement a trait at all, for the same reason: offset 0 is field data.
 
 ```rust
 struct Player { x: u8, y: u8 }

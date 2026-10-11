@@ -46,8 +46,8 @@ So R65 cannot target 6502-based machines like the NES, Commodore 64, Apple II, o
 ### What's supported?
 
 - Majority of the basic Rust syntax
-- Structs and Enums (C-style with explicit values)
-- Traits with dynamic dispatch (vtable-based, `DBR:Y` self pointer)
+- Structs, unions, newtypes, and enums — both fieldless (with explicit values) and [tagged](../language/enums.md#tagged-enums), whose variants carry a struct payload
+- Traits with dynamic dispatch (a TypeId byte indexes a per-method dispatch table; `DBR:Y` self pointer)
 - `match` with range patterns (`0..=15`), or patterns (`1 | 2 | 3`), and exhaustiveness checking
 - `for`/`while`/`loop` with labeled `break`/`continue`
 - `const fn` for compile-time computation
@@ -120,28 +120,31 @@ The standard library itself uses `asm!()` extensively with DMA macros, hardware 
 - **Mesen** (recommended): The compiler's `--dbg` flag generates source-level debug symbols.
 - **bsnes/higan**: Works for running and debugging ROMs.
 
-See the [tools page](../platform/tools.md) for setup details.
+See [Debugging with Mesen](../platform/compiler.md#debugging-with-mesen) for setup details.
 
 ## Language gotchas
 
 ### Why can't I multiply/divide with variables using `*` and `/`?
 
-The 65816 has no MUL or DIV instruction. The `*` and `/` operators compile to bit shifts (1–2 cycles), so they only accept power-of-2 constants:
+The 65816 has no MUL or DIV instruction. The `*` and `/` operators compile to bit shifts (2 cycles per shift), so they only accept power-of-2 constants:
 
 ```rust
-let result = value * 4;     // Compiles to ASL A, ASL A (2 cycles)
-let half = value / 2;       // Compiles to LSR A (1 cycle)
+let result = value * 4;     // two left shifts (4 cycles)
+let half = value / 2;       // one right shift (2 cycles)
 let oops = value * count;   // Compile error: non-constant operand
 ```
 
-For general multiplication and division, use the stdlib functions:
+For general multiplication and division, use the stdlib functions in `math.r65`:
 
 ```rust
-let product = mul8(a, b);   // Software multiply (~60 cycles)
-let quotient = div8(a, b);  // Software divide (~100 cycles)
+include!("lib/sneslib.r65")
+include!("lib/math.r65")
+
+let product = mul8(a, b);   // ~8 cycles on SNES hardware, ~150-300 in software
+let quotient = div8(a, b);  // ~30 cycles on SNES hardware, ~200-400 in software
 ```
 
-With `--cfg snes`, `mul8()` uses the SNES hardware multiplier for better performance. See the [math documentation](../platform/math.md) for full details.
+With `--cfg snes`, they use the SNES hardware multiplier and divider. `mod8`, `div16`, and `mod16` are SNES-only. See the [math documentation](../platform/math.md) for full details.
 
 ### Why are X and Y always 16-bit?
 
@@ -155,8 +158,8 @@ These are storage classes that control where a `static mut` variable lives in me
 
 | Storage | Address range | Access cost | Capacity |
 |---|---|---|---|
-| `#[zeropage]` | `$0000–$00FF` | 2–3 cycles | 256 bytes |
-| `#[lowram]` | `$0000–$1FFF` | 3–4 cycles | 8 KB |
+| `#[zeropage]` | `$0000–$00FF` | 3–4 cycles | 256 bytes |
+| `#[lowram]` | `$0000–$1FFF` | 4–5 cycles | 8 KB |
 | `#[ram]` | `$7E2000–$7FFFFF` | 4–5 cycles | ~120 KB |
 
 Use `#[zeropage]` for hot variables (loop counters, scratch registers). Use `#[ram]` for large buffers. Immutable `static` (no `mut`) goes to ROM automatically which no attribute is needed.

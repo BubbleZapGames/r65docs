@@ -99,7 +99,7 @@ The first return value always lands in A — there is no way to return a value i
 ### Register Aliasing
 
 ```rust
-let high_byte @ B = 0x12;
+let mut high_byte @ B = 0x12;
 high_byte = high_byte & 0xF0;
 ```
 
@@ -283,7 +283,7 @@ Directly modifying S is possible but dangerous. The compiler uses the stack for 
 R65 supports giving a named alias to a hardware register with zero runtime cost:
 
 ```rust
-let hitpoints @ A = PLAYER.health;  // 'hitpoints' aliases A
+let mut hitpoints @ A = PLAYER.health;  // 'hitpoints' aliases A
 hitpoints = hitpoints - 1;           // Modifies A directly
 ```
 
@@ -334,7 +334,7 @@ fn careful(input @ A: u8) -> u8 {
 }
 ```
 
-Valid registers for `#[preserves]`: `A`, `X`, `Y`, `STATUS`, `D`, `DBR`.
+Valid registers for `#[preserves]`: `A`, `X`, `Y`, `STATUS`, `D`, `DBR`. `A` is accepted only on a function that returns nothing — the result is passed in A, and restoring A at exit would overwrite it.
 Invalid: `B` (part of A), `PBR` (read-only), `S` (managed by call convention).
 
 ## Register Allocation

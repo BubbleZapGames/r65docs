@@ -172,8 +172,6 @@ fn bump(t @ A: TileId) -> TileId {   // register-bound parameter and return
 }
 ```
 
-Note that an enum payload can bind a register even though a bare enum cannot — `fn f(d @ A: Facing)` is accepted where `fn f(d @ A: Direction)` is not, because a newtype is a value type by design.
-
 ### Match
 
 `match` sees through to the payload for patterns, and reports exhaustiveness under the newtype's own name:
@@ -244,7 +242,7 @@ Mutation is expressed by returning a new value. There is no in-place form.
 
 ### Rules for `self`
 
-**One self form per type.** A newtype always takes bare `self`; a struct or [union](./unions.md) always takes `*self`. Writing the other form is an error either way:
+**One self form per type.** A newtype always takes bare `self`, as do the other by-value receivers — [fieldless enums](./enums.md#methods), [tagged enums](./enums.md#tagged-enums), and [`#[soa]` structs](./attributes.md#soa); a plain struct or [union](./unions.md) always takes `*self`. Writing the other form is an error either way:
 
 ```rust
 impl TileId { fn raw(*self) -> u8 { return self.0; } }
@@ -295,7 +293,7 @@ let d: far *dyn Drawable = &T as far *dyn Drawable;
 //         all payload; call the method directly on the newtype instead
 ```
 
-In practice the two rarely meet: a trait whose methods take `self` by value can only be implemented by a newtype, and one taking `*self` only by a struct, so a trait is naturally either dyn-able or newtype-able.
+In practice the two rarely meet: a trait implemented with by-value `self` (newtypes, fieldless enums, `#[soa]` structs) is used through static dispatch, and one implemented with `*self` by plain structs is the one that is dyn-able.
 
 `Clone` is rejected for a different reason — it is redundant, not impossible:
 

@@ -102,7 +102,7 @@ Block form:
 
 ```rust
 /*! Math routines for fixed-point 8.8 arithmetic.
-    Use these in preference to the raw `mul8` / `div8` builtins
+    Use these in preference to the raw `mul8` / `div8` routines in `math.r65`
     when you need saturation semantics.
 */
 ```
@@ -116,9 +116,9 @@ Block form:
 
 ## Keywords
 
-R65 reserves **57 keywords** organized into five categories. All keywords are case-sensitive and must be lowercase, with the sole exception of `Self`.
+R65 reserves **57 keywords** organized into four categories. All keywords are case-sensitive and must be lowercase, with the sole exception of `Self`.
 
-### Implemented Keywords (27)
+### Implemented Keywords (30)
 
 These keywords are actively used in the grammar:
 
@@ -148,6 +148,9 @@ These keywords are actively used in the grammar:
 | `self` | Self parameter in trait methods (`*self`, `far *self`, `near *self`) |
 | `dyn` | Dynamic dispatch pointer type (`*dyn Trait`) |
 | `include` | File inclusion (`include!()`) |
+| `include_bytes` | Embed a binary file as data (`include_bytes!()`) |
+| `include_asm` | Include a raw assembly file (`include_asm!()`) |
+| `extern` | Declare a function or static defined in assembly (`extern fn`, `extern static`) — see [Assembly Code](../platform/assembly-code.md) |
 | `asm` | Inline assembly (`asm!()`) |
 | `as` | Type casting |
 | `macro_rules` | Macro definition |
@@ -158,15 +161,15 @@ These keywords are actively used in the grammar:
 Use `asm!("WAI")`, `asm!("STP")`, `asm!("XBA")`, `asm!("MVN ...")`, `asm!("COP ...")`, `asm!("BRK ...")` directly, or reach for the `stdlib/65816.r65` macros (`block_move!`, `stack_guard_check!`, etc.) when you want a typed wrapper. `NOP()` is still provided as a built-in because of its optional repeat-count argument.
 
 
-### Reserved Rust Keywords (13)
+### Reserved Rust Keywords (12)
 
-These keywords are reserved for Rust compatibility and future use. Using them as identifiers is a compile error:
+These keywords are reserved for Rust compatibility and future use. Avoid them as identifiers: the compiler does not reject every one today, but a later version may give them meaning.
 
-`where`, `use`, `pub`, `mod`, `crate`, `Self`, `super`, `async`, `await`, `move`, `ref`, `extern`, `unsafe`
+`where`, `use`, `pub`, `mod`, `crate`, `Self`, `super`, `async`, `await`, `move`, `ref`, `unsafe`
 
 ### Strict Reserved Keywords (13)
 
-Reserved by Rust for future language expansion. R65 reserves them for compatibility:
+Reserved by Rust for future language expansion. R65 reserves them for compatibility, with the same advice — don't use them as identifiers:
 
 `abstract`, `become`, `box`, `do`, `final`, `macro`, `override`, `priv`, `typeof`, `unsized`, `virtual`, `yield`, `try`
 
@@ -241,8 +244,10 @@ let x: u8 = 255;      // 255 is u8
 let y: u16 = 1000;    // 1000 is u16
 let z: u16 = 0xFF;    // 0xFF is u16
 
-let w = 10;  // ERROR: cannot infer type without annotation
+let w = 10;           // no context: the smallest type that fits, u8
 ```
+
+With no annotation or other context, a literal gets the smallest type that holds it: `u8`, then `u16` for non-negative values, `i8`, then `i16` for negative ones (see [Type Inference](./types.md#type-inference)).
 
 A compile-time error is produced if the literal value does not fit in the target type (e.g., `let x: u8 = 256;`).
 
@@ -340,7 +345,7 @@ STATUS.Carry = true;  // OK: STATUS register property
 let status: u8 = 0;   // OK: variable 'status' (lowercase)
 ```
 
-Multi-character register names in the wrong case (`dbr`, `pbr`, `status`) produce a helpful error suggesting the uppercase form.
+Register names are recognized only in uppercase; a lowercase `status` or `dbr` is an ordinary identifier.
 
 ## Identifiers
 
@@ -365,7 +370,7 @@ R65 uses the following operator and punctuation tokens:
 
 | Token | Meaning |
 |-------|---------|
-| `+` `-` `*` `/` `%` | Arithmetic |
+| `+` `-` `*` `/` | Arithmetic (`%` is rejected — use `mod8()`) |
 | `&` `\|` `^` `~` | Bitwise |
 | `<<` `>>` | Shift |
 | `==` `!=` `<` `>` `<=` `>=` | Comparison |
@@ -376,7 +381,7 @@ R65 uses the following operator and punctuation tokens:
 | `@` | Register/variable binding |
 | `->` | Return type arrow |
 | `..` | Range (in `for` loops and `match`) |
-| `..=` | Inclusive range (in `match`) |
+| `..=` | Inclusive range (in `for` loops and `match`) |
 | `(` `)` `{` `}` `[` `]` | Grouping/delimiters |
 | `::` | Path separator (`Type::CONST`, `Type::assoc_fn()`, `Type::name!()`) |
 | `;` `:` `,` `.` `#` `'` | Punctuation |

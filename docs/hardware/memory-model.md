@@ -156,7 +156,7 @@ Local variables and stack parameters are stored on the hardware stack. Stack-rel
 A near pointer is 2 bytes (16-bit). It addresses memory within the 64KB bank selected by DBR:
 
 ```rust
-let ptr: *u8 = 0x2000;
+let ptr: *u8 = 0x2000 as *u8;
 let value = *ptr;           // Uses DBR for bank
 ```
 
@@ -167,7 +167,7 @@ Assembly: `LDA ($zp)` (indirect), `LDA ($zp),Y` (indirect indexed)
 A far pointer is 3 bytes (24-bit). It addresses any location in the full 16MB address space:
 
 ```rust
-let ptr: far *u8 = 0x7E_2000;  // Bank $7E, offset $2000
+let ptr: far *u8 = 0x7E_2000 as far *u8;  // Bank $7E, offset $2000
 let value = *ptr;
 ```
 
@@ -203,7 +203,7 @@ far fn(u8) -> u8      // Far function pointer (3 bytes, JSL/RTL)
 Null is address zero. There are no automatic null checks:
 
 ```rust
-let ptr: *u8 = 0x0000;
+let ptr: *u8 = 0x0000 as *u8;
 if ptr as u16 != 0 {     // Manual null check required
     let value = *ptr;
 }
@@ -236,7 +236,7 @@ Cannot take the address of register aliases (`&A` is an error).
 ### Dereference: `*`
 
 ```rust
-let ptr: *u8 = 0x2000;
+let ptr: *u8 = 0x2000 as *u8;
 let value = *ptr;     // Read
 *ptr = 42;            // Write
 ```
@@ -282,12 +282,12 @@ Best performance with zero-page pointer + Y register.
 Pointer arithmetic automatically scales by `sizeof(T)`:
 
 ```rust
-let ptr: *u16 = 0x2000;
+let mut ptr: *u16 = 0x2000 as *u16;
 let next: *u16 = ptr + 1;    // Advances by 2 bytes (sizeof(u16))
 let prev: *u16 = ptr - 1;    // Goes back 2 bytes
 ptr += 10;                    // Advances by 20 bytes
 
-let diff: u16 = next - ptr;   // Pointer difference (in elements)
+let diff: u16 = (next as u16) - (ptr as u16);   // Byte distance: there is no pointer subtraction
 ```
 
 Near pointers wrap at 64KB. Far pointers wrap at 16MB.
@@ -296,7 +296,7 @@ Near pointers wrap at 64KB. Far pointers wrap at 16MB.
 
 ```rust
 // Pointer type reinterpretation
-let u8_ptr: *u8 = 0x2000;
+let u8_ptr: *u8 = 0x2000 as *u8;
 let u16_ptr = u8_ptr as *u16;
 
 // Integer to pointer
@@ -307,7 +307,7 @@ let ptr = addr as *u8;
 let addr = ptr as u16;
 
 // Near to far (extends with DBR)
-let near_ptr: *u8 = 0x2000;
+let near_ptr: *u8 = 0x2000 as *u8;
 let far_ptr = near_ptr as far *u8;
 ```
 
@@ -316,8 +316,8 @@ let far_ptr = near_ptr as far *u8;
 Pointers can be compared with all comparison operators:
 
 ```rust
-let ptr1: *u8 = 0x2000;
-let ptr2: *u8 = 0x2100;
+let ptr1: *u8 = 0x2000 as *u8;
+let ptr2: *u8 = 0x2100 as *u8;
 
 if ptr1 < ptr2 { }         // Address comparison
 if ptr1 == ptr2 { }        // Equality

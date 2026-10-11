@@ -56,7 +56,13 @@ if dir == Direction::North {
 let value: u8 = Direction::East as u8;  // 1
 ```
 
-Casting from an integer to an enum is not supported; use a `match` or a conditional chain.
+An integer casts to a fieldless enum the same way, by reinterpreting the value:
+
+```rust
+let d: Direction = n as Direction;
+```
+
+There is no range check. A value that names no variant matches no variant's arm, so a `match` on it falls through to its `_` arm (and an exhaustive match with no `_` has nothing to run for it).
 
 ### Match
 
@@ -145,7 +151,7 @@ An element's bytes are split across two arrays, so there is nothing to copy, add
 
 - a local or parameter of the enum type
 - a field of the enum type in a plain struct (an [`#[soa]` struct](#a-field-of-an-soa-struct) is allowed)
-- `&POOL[i]`
+- `&POOL[i]`, and `&POOL[i].field` or `&c.field` on a payload binding — the next byte of a plane is the *next element's* field, so a pointer would walk the plane rather than the element
 - `impl Clone`
 - `impl Trait for` — dispatch stores a TypeId byte at offset 0, which is where the discriminant lives, the same reason [unions](./unions.md) cannot implement traits
 
@@ -161,6 +167,17 @@ POOL[i] = Shape::Empty;                 // tag store only
 ```
 
 The payload must be a struct literal. `Shape::C(TEMPLATE)` — copying in an existing struct — is rejected; write the fields.
+
+Every operand is read before the first store, and the tag is written last. That makes it safe to rewrite an element as another variant built from its old payload, even though the new fields land on the bytes the old ones are read from:
+
+```rust
+match POOL[i] {
+    Shape::C(c) => { POOL[i] = Shape::R(Rect { w: 1, h: c.r }); }   // c.r is read first
+    _ => {}
+};
+```
+
+The index is evaluated once for the tag and all the payload stores, so `POOL[next()] = Shape::C(..)` calls `next()` once.
 
 ### Matching
 
@@ -183,6 +200,38 @@ match POOL[i] {
     Shape::C(c) => { c.r = c.r + 1; }   // increments POOL[i]'s payload
     _ => {}
 };
+```
+
+The view is of the element that was **matched**. Its index is read once, so a side effect in it runs once, and `i = i + 1` inside the arm does not move `c` to another element.
+
+Rewriting the matched element ends the binding. The new variant's planes overlay the old one's, so a later read of `c` would see the new bytes as `Circle` fields — that is an error:
+
+```rust
+match POOL[i] {
+    Shape::C(c) => {
+        POOL[i] = Shape::R(Rect { w: c.r, h: 1 });   // fine: c read before the store
+        OUT = c.r;                                   // error: used after the rewrite
+    }
+    _ => {}
+};
+```
+
+```
+error: binding 'c' is used after its element was rewritten (line 3)
+hint: the rewrite overlays the element's payload planes, so 'c' no longer names
+      its old fields; read what you need into a local before the rewrite, or use
+      it in the new variant's literal
+```
+
+The check follows source order and is conservative across branches: a rewrite inside an `if` ends the binding for everything after the `if`.
+
+To test a single variant, `if let` is the same match with an empty `_` arm and binds the same view; `while let` and `let ... else` follow suit (see [Control Flow](./control-flow.md#if-let-while-let-and-let--else)):
+
+```rust
+if let Shape::C(c) = POOL[i] { c.r = c.r + 1; }
+
+let Shape::R(r) = POOL[i] else { return 0; };
+OUT = r.w;
 ```
 
 A match must cover every variant or carry a `_`. Coverage is checked against the variants, not the tag's integer range, and an arm naming a different enum is rejected.
@@ -299,14 +348,20 @@ static mut POOL: [Enemy; 16];
 //       POOL__kind__Fireball__phase    region + 16
 ```
 
-Planes of different variants share bytes, exactly as union members do: element `i`'s payload bytes are still private to element `i`, they are just no longer adjacent.
+Planes of different variants share bytes, as union members do: element `i`'s payload bytes are still private to element `i`, they are just no longer adjacent.
+
+Planes overlay only planes of the **same width**. The region is cut into one lane per field width, and variants overlay each other within a lane. Two planes of different strides laid from the same base would disagree about which element a byte belongs to — a `u16` plane's element `i` covers the bytes a `u8` plane uses for elements `2i` and `2i + 1` — so writing one element's payload would rewrite two others'. The cost is that variants of different widths no longer share bytes: `{u8, u8}` and `{u16, u8}` need 2 + 2 bytes per element where either alone needs 3 or fewer. To keep the region small:
+
+- give variants fields of the same widths where you can;
+- put a wide value most variants carry in the parent `#[soa]` struct beside the enum, not in each payload;
+- when sharing bytes matters more than raw-index access, use plain payloads, whose data plane is a union array where variants of any width share bytes.
 
 What this buys is that a match arm never has to rescale the index, because every plane in reach strides by 1 — each field update below is a single indexed instruction:
 
 ```rust
 impl Enemy {
     fn update(self) {
-        match POOL[self].kind {
+        match self.kind {
             Kind::Fireball(f) => { f.phase = f.phase + 1; self.vy = -1; }
             _ => {}
         };
@@ -326,6 +381,64 @@ impl Hazard for Fireball {
 Kind::Fireball(f) => { self.x = f.burn(); }
 ```
 
+#### A payload's `self` is not a number
+
+Under the hood a payload method receives the pool index, but in the source its `self` is an element of its variant and nothing else. A payload has no back-reference to the struct it sits in, so its method may use `self` in exactly three ways:
+
+```rust
+self.heat           // its own field
+self.burn()         // its own method
+self as u16         // the pool index, asked for explicitly
+```
+
+Anything else — `POOL[self].x`, `helper(self)`, `self == 0`, `let i = self` — is rejected:
+
+```
+error: 'self' in a method on #[soa] payload struct 'Fireball' is not a value
+hint: it is an element of 'Kind::Fireball', not an index: reach its own fields
+      as `self.field`; code that needs the parent's fields belongs in an impl
+      on the parent; write `self as u16` if the pool index itself is needed
+```
+
+So a kind's behaviour splits in two. The payload's own methods keep what touches only its own state; code that mixes the shared fields with the payload belongs on the **parent**, where `self.kind` is matched like any element and the binding reaches the payload:
+
+```rust
+impl Fireball {
+    fn process(self) -> u8 {            // own state only
+        self.heat = self.heat + 1;
+        return self.phase;
+    }
+}
+
+impl Enemy {
+    fn burn(self) {
+        match self.kind {
+            Kind::Fireball(f) => {
+                self.x = self.x + f.process();  // shared plane, from the payload's method
+                if f.heat > 9 {
+                    self.kind = Kind::None;     // change of kind
+                }
+            }
+            _ => {}
+        };
+    }
+}
+```
+
+Every access is still a single indexed instruction and the payload call passes the index straight through; the price is one tag test per call. When the caller has *already* matched — a per-frame loop dispatching on the tag — put the mixing code in that arm instead of calling a parent method that matches again:
+
+```rust
+for i in 0..16 {
+    match POOL[i].kind {
+        Kind::Fireball(f) => {
+            POOL[i].x = POOL[i].x + f.process();
+            if f.heat > 9 { POOL[i].kind = Kind::None; }
+        }
+        _ => {}
+    };
+}
+```
+
 Rules:
 
 - **All or nothing.** Within one enum, either every payload struct is `#[soa]` or none is. Mixing is an error.
@@ -340,6 +453,8 @@ Rules:
 - **A payload must be a declared struct** — plain or `#[soa]`, not mixed within one enum — not a union, newtype, enum, primitive, array, or pointer.
 - **No `= n`** on a tagged enum's variants.
 - **No payload binding inside an or-pattern** — give the variant its own arm.
+- **No use of a payload binding after its element is rewritten.**
+- **A `#[soa]` payload's `self` is not a value** — only `self.field`, `self.method()`, and `self as u16`.
 - A payload cannot be copied in from an existing struct; write the fields.
 
 ## See Also

@@ -73,9 +73,21 @@ See [Optimization levels in detail](#optimization-levels-in-detail) below for wh
 | `--disable-scratch-parameters` | Disable promotion of stack params to scratch registers |
 | `--disable-loop-promotion` | Disable promotion of loop counters to X/Y registers |
 
-The `--cfg` flag enables conditional compilation. Code guarded by `if cfg(snes) { ... }` or `#[cfg(snes)]` is only compiled when `--cfg snes` is passed. Multiple flags can be set: `--cfg snes --cfg debug`.
+The `--cfg` flag enables conditional compilation. Code guarded by `if cfg!(snes) { ... }` or `#[cfg(snes)]` is only compiled when `--cfg snes` is passed. Multiple flags can be set: `--cfg snes --cfg debug`.
 
 The `--dbg` flag generates a `.dbg` file alongside the assembly output containing source-level debug information in cc65/ld65 format, compatible with the Mesen emulator.
+
+### Linter
+
+| Flag | Description |
+|------|-------------|
+| `--lint` | Run the linter after type checking, then compile as usual |
+| `--lint-only` | Run the linter and exit (skips MIR and code generation) |
+| `--lint-config PATH` | Use this `r65-lint.toml` (default: discovered from the source file's directory) |
+| `--allow CODE` | Disable a lint code (repeatable, or comma-separated) |
+| `--deny CODE` | Promote a lint code to an error (repeatable, or comma-separated) |
+
+A project created by `r65x init` includes an `r65-lint.toml`.
 
 ### Diagnostic flags
 
@@ -114,21 +126,25 @@ Enables all MIR-level and assembly-level passes. This is the recommended level f
 
 #### MIR-level passes
 
-**Dead function elimination** removes functions that are never called. Entry points, interrupt handlers, and functions reachable through trait dispatch are preserved. After inlining (see below), this pass runs a second time to clean up functions that were fully inlined into their callers.
+**Dead function elimination** removes functions that are never called. Entry points, interrupt handlers, `#[used]` functions, and functions reachable through trait dispatch are preserved. After inlining (see below), this pass runs a second time to clean up functions that were fully inlined into their callers.
 
 **Dead code elimination** uses liveness analysis to remove unreachable basic blocks and instructions that write to values never read.
 
 **Far-to-near call optimization** converts `far fn` calls (JSL/RTL, 4 bytes, 8 cycles) to near calls (JSR/RTS, 3 bytes, 6 cycles) when the caller and callee are in the same bank, the function address is never taken, the function is not an interrupt handler, and it is not a `*dyn` dispatch target. Saves 1 byte and 2 cycles per call site. Since methods are far by default, this is what keeps same-bank method calls at `JSR`/`RTS`.
 
-**Function inlining** at `-O1` only inlines functions explicitly marked with `#[inline]` or `#[inline(always)]`, and only if they have fewer than 30 MIR instructions. Functions are never inlined if they are recursive, interrupt handlers, entry points, or contain inline assembly (`asm!()`); a far function is inlined into a caller in another bank only when its body is provably bank-independent. Functions marked `#[inline(never)]` are always respected.
+**Function inlining** at `-O1` only inlines functions explicitly marked `#[inline]` or `#[inline(always)]`. `#[inline(always)]` inlines regardless of size; `#[inline]` is a hint, taken when the body's estimated cost is under about 60 cycles. Functions are never inlined if they are recursive, interrupt handlers, entry points, trait methods, carry `#[preserves(...)]`, or contain inline assembly (`asm!()`); a far function is inlined into a caller in another bank only when its body is provably bank-independent. Functions marked `#[inline(never)]` are always respected.
+
+**Constant-index folding** runs after inlining. An indexed access whose index the compiler knows to be a constant becomes a fixed-address access, and the now-unused index register load is dropped. This is what makes an `#[inline(always)]` `#[soa]` method called on a constant element (`POOL[0].step()`) cost the same as writing `POOL[0].x` by hand.
+
+**Memory operand folding** — a static loaded once, only to be the right-hand side of `+`, `-`, `&`, `|`, `^`, or a comparison, is read directly by that operation instead of being loaded separately. The bigger win is indirect: the left operand can stay in A instead of both values spilling to the stack.
+
+**Memory increment/decrement** — `m = m + 1` and `m = m - 1` on a zeropage or low-RAM static, or on an `#[soa]` field plane, become a single in-place increment or decrement of memory, indexed or not, at 8 or 16 bits. A following `m == 0` / `m != 0` test is dropped, since the increment already set the zero flag.
 
 #### Assembly-level peephole passes
 
 The peephole optimizer runs iteratively until no further changes are made. Each iteration applies the following transformations:
 
 **Instruction folding** — Replaces multi-instruction sequences with single instructions:
-- `LDA addr; CLC; ADC #1; STA addr` → `INC addr`
-- `LDA addr; SEC; SBC #1; STA addr` → `DEC addr`
 - `CLC; ADC #1` → `INC A` (when carry is dead after)
 - `SEC; SBC #1` → `DEC A` (when carry is dead after)
 - `LDA #$00; STA addr` → `STZ addr` (removes the LDA when A is dead after)
@@ -169,8 +185,8 @@ Enables everything from `-O1` plus **implicit function inlining** and **static l
 
 At this level the compiler considers inlining functions that do not have an `#[inline]` attribute:
 
-- Functions called exactly once are always inlined (no code size increase since the original is eliminated by dead function elimination).
-- Functions called more than once are inlined only if they have fewer than 3 MIR instructions (very small helpers like getters or flag checks).
+- Functions called exactly once are inlined if they fit the same budget as `#[inline]` (about 60 cycles); the original is then removed by dead function elimination, so there is no code size increase.
+- Functions called more than once are inlined only if the body costs no more than the call it replaces (about 12 cycles for `JSR`/`RTS`) — getters and flag checks. Inside a loop the limit is three times that, inside a nested loop six times, capped at the `#[inline]` budget.
 
 #### Static loop unrolling
 
@@ -207,6 +223,9 @@ These analysis and transformation passes run regardless of optimization level be
 | Dead code elimination | — | yes | yes |
 | Far-to-near call conversion | — | yes | yes |
 | Explicit inlining (`#[inline]`) | — | yes | yes |
+| Constant-index folding | — | yes | yes |
+| Memory operand folding | — | yes | yes |
+| Memory increment/decrement | — | yes | yes |
 | Implicit inlining (called-once, small) | — | — | yes |
 | Static loop unrolling | — | — | yes |
 | Peephole: instruction folding | — | yes | yes |

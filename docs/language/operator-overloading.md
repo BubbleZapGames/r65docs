@@ -77,8 +77,8 @@ if score != high_score {
 ## On Your Own Structs
 
 The same pattern works for any struct. Each method takes a pointer to `self` and
-a pointer to the other operand; use `far *self` when the value lives in RAM,
-`*self` otherwise (see [near vs far self](structs.md#methods-and-impl-blocks)):
+a pointer to the other operand; use `far *self` when the value lives in
+`#[ram]` (or any far data), `*self` for zeropage, lowram, and other near data (see [near vs far self](structs.md#methods-and-impl-blocks)):
 
 ```rust
 struct Vec2 { x: i16, y: i16 }
@@ -132,7 +132,8 @@ let grid2 = grid.clone();                       // arrays clone without any impl
 ## Limitations
 
 - **No value-producing form.** `let c = a + b` is not available for structs —
-  use the in-place form: `c = a; c += b;`.
+  use the in-place form: `c.clone_from(&a); c += b;` (the type needs
+  `impl Clone`; a bare `c = a` struct copy is an error).
 - **One operand type per operator.** To combine a struct with a different type
   (e.g. add a `u16` to an `I32`), call a named method like `score.add_u16(1)`
   instead of `+=`.

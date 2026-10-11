@@ -12,12 +12,13 @@ This page specifies R65's statements and control flow constructs: variable decla
 
 ### `let` Bindings
 
-The `let` statement declares a local variable. Every variable must have an explicit type annotation or a register alias from which the type can be inferred.
+The `let` statement declares a local variable. Its type comes from an explicit annotation, a register alias, or the initializer.
 
 **Syntax:**
 
 ```rust
 let name: Type = initializer;
+let name = initializer;
 let mut name: Type = initializer;
 let mut name: Type;
 ```
@@ -26,13 +27,14 @@ let mut name: Type;
 
 - `let` declares an immutable binding. The variable cannot be reassigned after initialization.
 - `let mut` declares a mutable binding.
-- An initializer is required for immutable bindings. Mutable bindings may omit the initializer, in which case the variable holds an undefined value until assigned.
-- The type annotation is required unless a register alias is present (see below).
+- An immutable binding without an initializer can never be given a value, so in practice it takes one. Mutable bindings may omit the initializer, in which case the variable holds an undefined value until assigned.
+- The type annotation may be omitted when an initializer or a register alias (see below) determines it. A bare integer literal gets the smallest type that holds it (`let n = 10;` is a `u8`); see [Type Inference](./types.md#type-inference). A binding with no initializer needs its annotation.
 
 **Examples:**
 
 ```rust
 let x: u8 = 10;
+let y = x + 1;              // u8, from the initializer
 let mut counter: u16 = 0;
 let mut temp: u8;           // uninitialized, must assign before use
 ```
@@ -73,7 +75,7 @@ Functions that return multiple values via hardware registers can be captured in 
 ```rust
 let a, b = function_call();      // declare and bind
 a, b = function_call();          // assign to existing variables
-let mut a, mut b = function_call(); // declare mutable and bind
+let mut a, b = function_call();  // declare mutable and bind (the mut applies to every name)
 ```
 
 **Semantics:**
@@ -85,8 +87,8 @@ let mut a, mut b = function_call(); // declare mutable and bind
 **Examples:**
 
 ```rust
-fn get_position() -> u16, u16 {
-    return X, Y;
+fn get_position() -> u8, u16 {
+    return PLAYER_X, PLAYER_Y;   // A gets the u8, X the u16
 }
 
 let px, py = get_position();
@@ -223,7 +225,7 @@ if condition {
 
 **Semantics:**
 
-- The condition must evaluate to `bool` or a comparable expression.
+- The condition must be a `bool` — a comparison, a logical expression, or a `bool` value. An integer is not a condition; write `x != 0`.
 - The body executes only when the condition is true.
 
 **Examples:**
@@ -637,7 +639,7 @@ fn get_status() -> u8 {
 
 ### Never-Returning Functions
 
-Functions annotated with `-> !` never return to their caller.
+Functions annotated with `-> !` never return to their caller. The compiler emits no `RTS`/`RTL`; if control can reach the end of the body or a `return`, it emits a halt loop there instead (see [Never Type](./types.md#never-type)).
 
 ```rust
 #[entry]
@@ -861,8 +863,12 @@ match state {
         check_collisions();
     },
     _ => {},
-}
+};
 ```
+
+A `match` in statement position is still an expression, so when another statement follows it, it must end in `};` — only a `match` that is the last thing in its block can drop the `;` (see [Match as Statement](./match-expressions.md#match-as-statement)).
+
+To test a single pattern, use [`if let`, `while let` and `let ... else`](./control-flow.md#if-let-while-let-and-let--else), each shorthand for a two-arm match.
 
 ---
 

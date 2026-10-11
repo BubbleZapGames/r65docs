@@ -14,7 +14,7 @@ R65 embraces the limitations of 8-bit/16-bit hardware rather than abstracting th
 
 **Hardware Transparency.** CPU registers (A, X, Y), bank boundaries, and processor modes are first-class language concepts. There is no hidden indirection between your code and the hardware.
 
-**Type Safety.** The compiler catches bank overflow, mode mismatches, and size errors at compile time. All type conversions require explicit `as` casts -- there are no implicit conversions.
+**Type Safety.** The compiler catches bank overflow, mode mismatches, and size errors at compile time. Narrowing and reinterpreting conversions require explicit `as` casts; the only implicit conversion is widening the smaller operand of a mixed-width operator.
 
 **Zero Abstraction Cost.** High-level constructs compile to efficient assembly that matches hand-written code. Register parameters, packed structs, and inline assembly provide full control over generated output.
 
@@ -31,10 +31,10 @@ u8    // Unsigned 8-bit  (0 to 255)
 i8    // Signed 8-bit    (-128 to 127)
 u16   // Unsigned 16-bit (0 to 65535)
 i16   // Signed 16-bit   (-32768 to 32767)
-bool  // Boolean (stored as u8, 0 or non-zero)
+bool  // Boolean (stored as u8, 0 or 1)
 ```
 
-All operations wrap on overflow with no runtime checks. Type conversions require explicit `as` casts:
+All operations wrap on overflow with no runtime checks. Conversions require explicit `as` casts (see [Type System](../language/types.md) for the one implicit widening):
 
 ```rust
 let wide: u16 = (narrow as u16) + 1;   // Zero-extend u8 to u16
@@ -67,19 +67,20 @@ All registers are mutable except `PBR` (read-only). The type of `A` depends on t
 Register aliasing binds a named variable to a hardware register at zero cost:
 
 ```rust
-let hitpoints @ A = PLAYER.health;  // A holds hitpoints
+let mut hitpoints @ A = PLAYER.health;  // A holds hitpoints
 hitpoints = hitpoints - 1;           // Modifies A directly
 ```
 
 ## Variables and Constants
 
-Local variables require type annotations or register aliasing:
+A local's type is written out, taken from the register it is bound to, or inferred from its initializer:
 
 ```rust
 let x: u8 = 10;
 let mut counter: u16 = 0;
 let value @ A: u8 = 42;      // Bound to A register
 let index @ X = 0;           // Type inferred from register (u16)
+let y = x + 1;               // Type inferred from the initializer (u8)
 ```
 
 Constants and const functions are evaluated at compile time:
@@ -164,7 +165,7 @@ let result: u8 = match tile_id {
 
 The compiler selects the optimal match strategy: lookup tables, jump tables, or branch chains.
 
-For complete control flow documentation, see [Control Flow](../language/statements.md).
+Single-pattern tests are written `if let`, `while let`, and `let ... else`. For complete control flow documentation, see [Control Flow](../language/control-flow.md).
 
 ## Memory Storage Classes
 
@@ -172,8 +173,8 @@ Storage class is determined by mutability and attributes:
 
 | Storage | Attribute | Address Range | Speed |
 |---------|-----------|---------------|-------|
-| Direct Page | `#[zeropage]` | `$0000-$00FF` | 2-3 cycles |
-| Low RAM | `#[lowram]` | `$0000-$1FFF` | 3-4 cycles |
+| Direct Page | `#[zeropage]` | `$0000-$00FF` | 3-4 cycles |
+| Low RAM | `#[lowram]` | `$0000-$1FFF` | 4-5 cycles |
 | Main RAM | `#[ram]` | `$7E2000-$7FFFFF` | 4-5 cycles |
 | ROM | *(immutable static)* | Bank-dependent | 4-5 cycles |
 | Hardware | `#[hw(addr)]` | I/O addresses | 4-6 cycles |
@@ -216,12 +217,25 @@ fn damage_player(p: *Player, amount @ A: u8) {
 }
 ```
 
-Enums are C-style with explicit or auto-incrementing values. No data-carrying variants:
+Fieldless enums are named integers with explicit or auto-incrementing values:
 
 ```rust
 enum Direction { North = 0, East, South, West }
 let dir = Direction::North;
 let value: u8 = dir as u8;
+```
+
+A [tagged enum](../language/enums.md#tagged-enums) carries a struct payload per variant. Its one `static mut` is stored as a tag array and a payload array, so reading an element's tag needs no multiply:
+
+```rust
+struct Circle { r: u8 }
+enum Shape { Empty, C(Circle) }
+
+#[lowram]
+static mut POOL: [Shape; 16];
+
+POOL[i] = Shape::C(Circle { r: 5 });
+if let Shape::C(c) = POOL[i] { c.r = c.r + 1; }
 ```
 
 ## Arrays
@@ -238,15 +252,15 @@ BUFFER[X] = 42;
 let val: u8 = BUFFER[Y];
 ```
 
-String literals are only valid in static array initializers. Arrays cannot be passed by value -- use pointer parameters (`*u8`).
+String literals are valid in static array initializers and as an inline `*u8` value (`let msg: *u8 = "Hi";`, or an argument to a `*u8` parameter). Arrays cannot be passed by value -- use pointer parameters (`*u8`).
 
 ## Pointers
 
 Near pointers (`*T`) are 16-bit addresses within the current data bank. Far pointers (`far *T`) are 24-bit addresses spanning the full address space:
 
 ```rust
-let ptr: *u8 = 0x2000;              // Near pointer
-let far_ptr: far *u8 = 0x01_2000;   // Far pointer (bank 1)
+let ptr: *u8 = 0x2000 as *u8;                // Near pointer
+let far_ptr: far *u8 = 0x01_2000 as far *u8; // Far pointer (bank 1)
 *ptr = 5;                            // Dereference
 ptr[Y] = 42;                        // Indexed access
 
@@ -286,15 +300,17 @@ Near functions (`fn`) use JSR/RTS and can only call within the same bank. Far fu
 ```rust
 #[interrupt(nmi)]
 fn vblank_handler() {
-    // Auto-generated: PHP, register saves, body, register restores, PLP, RTI
+    // The compiler saves the registers the body modifies, restores them, and returns with RTI
     update_sprites();
     update_audio();
 }
 
 #[interrupt(irq, preserve=false)]
 fn fast_irq() {
-    // No automatic preservation -- manual control
-    asm!("RTI");
+    // No automatic preservation -- save what you modify yourself
+    asm!("PHA");
+    acknowledge_irq();
+    asm!("PLA");
 }
 ```
 
@@ -318,11 +334,16 @@ let masked = a & 0x0F;    // Bitwise AND, OR, XOR unrestricted
 General multiplication, division, modulo, and variable shifts require function calls:
 
 ```rust
-let product = mul8(a, b);    // 20-100+ cycles
-let quotient = div8(a, b);   // 50-200+ cycles
-let remainder = mod8(a, b);  // 50-200+ cycles
-let dynamic = shl8(a, n);    // Variable shift
+include!("lib/sneslib.r65")
+include!("lib/math.r65")
+
+let product = mul8(a, b);    // ~8 cycles on SNES hardware, ~150-300 in software
+let quotient = div8(a, n);   // ~30 cycles on SNES hardware, ~200-400 in software
+let remainder = mod8(a, n);  // SNES only (~30 cycles); use mod_shift elsewhere
+let dynamic = shl8(a, n);    // Variable shift, cost grows with the amount
 ```
+
+These are standard library functions from `math.r65`; see [Math](../platform/math.md) for signatures.
 
 Compound assignment (`+=`, `-=`, `&=`, etc.), postfix increment/decrement (`x++`, `x--`), and short-circuit logical operators (`&&`, `||`) are all supported.
 
@@ -340,12 +361,12 @@ macro_rules! inc_twice($reg:reg) {
 inc_twice!(X);  // Expands to: X++; X++;
 
 macro_rules! push_all($($reg:reg),*) {
-    $( asm!("PH" + $reg); )*
+    $( asm!("PH{R}", R=stringify!($reg)); )*
 }
 push_all!(A, X, Y);
 ```
 
-Each macro has a single pattern (no multiple arms). Expansion is not hygienic.
+A macro may have several `(pattern) => { body };` arms — the first that matches wins — or use the single-arm shorthand above. Expansion is not hygienic.
 
 For complete macro documentation, see [Macros](../language/macros.md).
 
@@ -355,7 +376,7 @@ For complete macro documentation, see [Macros](../language/macros.md).
 asm!("WAI");                    // Embed raw 65816 assembly
 asm!("PHP", "SEI", "WAI");     // Multiple instructions
 
-include!("hardware_defs.r65");  // Textual inclusion (C-style #include)
+include!("hardware_defs.r65")   // Textual inclusion (C-style #include), no trailing ;
 ```
 
 The compiler treats `asm!()` as a black box and assumes all registers are clobbered. `include!()` paths are relative to the including file; all content shares the global namespace.
@@ -388,7 +409,7 @@ R65 deliberately omits Rust features that do not map well to 8-bit/16-bit hardwa
 - **No `unsafe` keyword** -- all code has direct hardware access by default
 - **No bounds checking** -- array and pointer indexing is unchecked
 - **No string types or dynamic collections** -- use fixed-size arrays
-- **No advanced enums** -- no data-carrying variants
+- **No tuple variants or inline-field variants** -- a tagged enum's payload is always a declared struct
 - **No procedural macros** -- simplified `macro_rules!` only
 
 ## Target Platform
@@ -401,7 +422,7 @@ R65 deliberately omits Rust features that do not map well to 8-bit/16-bit hardwa
 ## Further Reading
 
 - [Type System](../language/types.md) -- primitive types, composite types, mode tracking, and cast rules
-- [Control Flow](../language/statements.md) -- if/else, loops, match, break/continue, and labels
+- [Control Flow](../language/control-flow.md) -- if/else, `if let`, loops, match, break/continue, and labels
 - [Calling Convention](../language/functions.md) -- parameter passing, return values, stack frames, and cross-bank calls
 - [Pointers and Memory](../hardware/memory-model.md) -- pointer types, addressing modes, storage classes, and the SNES memory map
 - [Operators](../language/expressions.md) -- operator restrictions, cost model, and built-in functions

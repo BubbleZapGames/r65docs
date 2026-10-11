@@ -76,6 +76,37 @@ let abs_val: u8 = if x >= 0 { x } else { 0 - x };
 
 ---
 
+## `if let`, `while let` and `let ... else`
+
+Each tests a value against one pattern, and each is shorthand for a two-arm [`match`](./match-expressions.md) — it compiles to exactly the code of the match written out by hand:
+
+| Source | Means |
+|--------|-------|
+| `if let P = e { a } else { b }` | `match e { P => { a } _ => { b } }` |
+| `'l: while let P = e { body }` | `'l: loop { match e { P => { body } _ => break 'l } }` |
+| `let P = e else { d }; rest` | `match e { P => { rest } _ => { d } }` |
+
+They are most useful with [tagged enums](./enums.md#tagged-enums), where a pattern binds a variant's payload:
+
+```rust
+if let Shape::C(c) = POOL[i] { c.r = c.r + 1; }      // writes the pool
+
+while let Shape::C(c) = POOL[i] { c.r = 0; i = i + 1; }
+
+fn width(i: u16) -> u8 {
+    let Shape::R(r) = POOL[i] else { return 0; };
+    r.w
+}
+```
+
+`P` is any match pattern, including an or-pattern (`if let Dir::North | Dir::South = d`). A payload binding is the same view of the pool a match arm gets, not a copy.
+
+- `if let` works as a value, where its `else` is required, and chains with `else if` and `else if let`.
+- In a `while let`, `continue` re-tests `e`.
+- `let ... else` puts the rest of the block in scope of the pattern's bindings, so its `else` block must **diverge**: end in `return`, `break`, `continue`, a `loop` with no `break` out of it, a call to a `-> !` function, or an `if`/`else` whose branches all diverge. Anything else is an error. The statement ends in `};`. Its pattern cannot be a bare name — `let x = e` is an ordinary `let`.
+
+---
+
 ## Block Expressions
 
 A block `{ ... }` can be used as an expression. The last item in the block, written without a trailing semicolon, is the block's value. Variables declared inside the block are scoped to the block.
@@ -389,10 +420,10 @@ fn validate(input @ A: u8) -> u8 {
 Functions can return up to four values by listing their types:
 
 ```rust
-fn get_xy() -> u16, u16 {
-    X = PLAYER_X;
-    Y = PLAYER_Y;
-    return X, Y;
+fn get_xy() -> u8, u16 {
+    A = PLAYER_X;
+    X = PLAYER_Y;
+    return A, X;
 }
 
 let px, py = get_xy();
@@ -419,7 +450,7 @@ fn fatal_error() -> ! {
 }
 ```
 
-A function declared `-> !` that can actually return is a compile error.
+The compiler emits no `RTS`/`RTL` for a `-> !` function. If control can reach the end of the body or a `return`, it emits a halt loop there instead — not a compile error (see [Never Type](./types.md#never-type)).
 
 ---
 
@@ -512,19 +543,18 @@ fn main() -> ! {
 Hardware polling with a timeout counter to avoid infinite hangs:
 
 ```rust
-fn wait_ready(timeout @ X: u16) -> bool {
-    loop {
-        if (STATUS & READY_BIT) != 0 {
+#[hw(0x4212)]
+static mut HVBJOY: u8;
+const VBLANK_BIT: u8 = 0x80;
+
+fn wait_vblank(timeout @ X: u16) -> bool {
+    while timeout != 0 {
+        if HVBJOY & VBLANK_BIT != 0 {
             return true;
         }
-
-        if timeout == 0 {
-            return false;
-        }
-
         timeout -= 1;
-        wait_frame();
     }
+    return false;               // timed out
 }
 ```
 
@@ -553,26 +583,28 @@ fn copy_memory(src: *u8, dst: *u8, count @ X: u16) {
 
 ### Binary Search
 
-A binary search over a ROM lookup table with early return:
+A binary search over a sorted 256-entry ROM table with early return. The bounds are `u16` with an exclusive upper bound, so neither can wrap around at 0 or 255:
 
 ```rust
-fn binary_search(target @ A: u8) -> u8 {
-    let mut low: u8 = 0;
-    let mut high: u8 = 255;
+static TABLE: [u8; 256] = [/* sorted values */];
 
-    while low <= high {
+fn binary_search(target: u8) -> u8 {
+    let mut low: u16 = 0;
+    let mut high: u16 = 256;        // exclusive upper bound
+
+    while low < high {
         let mid = low + ((high - low) >> 1);
-        let value = table[mid];
+        let value = TABLE[mid];
 
         if value == target {
-            return mid;
+            return mid as u8;
         } else if value < target {
             low = mid + 1;
         } else {
-            high = mid - 1;
+            high = mid;
         }
     }
 
-    return 0xFF;                // not found
+    return 0xFF;                    // not found
 }
 ```

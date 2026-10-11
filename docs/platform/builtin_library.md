@@ -79,17 +79,17 @@ const HEALTH_OFFSET: u16 = offset_of(Player, health);  // 2
 
 ### Conditional Compilation
 
-#### `cfg(condition) -> bool`
+#### `cfg!(condition) -> bool`
 
 Returns `true` if the given configuration flag is active.
 
 ```rust
-if cfg(snes) {
+if cfg!(snes) {
     // SNES-specific code
 }
 ```
 
-Flags are set via the `--cfg` compiler flag: `r65c game.r65 --cfg snes`.
+Flags are set via the `--cfg` compiler flag: `r65c game.r65 --cfg snes`. No flag is predefined; a project created by `r65x init` passes `--cfg snes` from its Makefile.
 
 ---
 
@@ -379,7 +379,7 @@ static SQRT_TABLE: [u16; 64] = build_distance_table();
 |----------|-----------|---------|---------|
 | `size_of(T)` | type | u16 | Size in bytes |
 | `offset_of(S, f)` | struct, field | u16 | Field byte offset |
-| `cfg(flag)` | ident | bool | Configuration check |
+| `cfg!(flag)` | ident | bool | Configuration check |
 | `fixed_sin(i, sz, amp)` | int, int, int | i16 | `round(sin(2*pi*i/sz) * amp)` |
 | `fixed_cos(i, sz, amp)` | int, int, int | i16 | `round(cos(2*pi*i/sz) * amp)` |
 | `fixed_atan2(y, x, sz)` | int, int, int | u16 | `atan2(y,x)` mapped to `0..sz` |

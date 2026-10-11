@@ -6,7 +6,7 @@ description: "R65 trait definitions, implementations, and TypeId-based dynamic d
 
 # Traits
 
-R65 traits provide TypeId-based dynamic dispatch for polymorphism. A struct that implements a trait automatically receives a `__type_id` byte at offset 0, enabling heterogeneous collections with fast, predictable dispatch.
+R65 traits provide TypeId-based dynamic dispatch for polymorphism. A plain struct that implements a trait automatically receives a `__type_id` byte at offset 0, enabling heterogeneous collections with fast, predictable dispatch. Types with no room for that byte — newtypes, fieldless enums, and `#[soa]` structs — implement traits for static dispatch only.
 
 ## Trait Definition
 
@@ -16,20 +16,20 @@ A trait declares a set of methods. Methods take `*self` as the first parameter:
 
 ```rust
 trait Drawable {
-    fn draw(*self, x @ X: u16, y @ Y: u16);
+    fn draw(*self, x: u16, y: u16);
     fn get_width(*self) -> u8;
 }
 ```
 
-Methods can use any of the standard R65 parameter-passing mechanisms (register, stack, variable-bound) for their non-self parameters. Methods can return values.
+A trait method's parameters after `self` are **stack-passed**. Register bindings (`x @ X: u16`) are rejected on trait methods, because dispatch needs one ABI that every implementor shares. Methods can return values.
 
-In an `impl`, the receiver form follows the **implementing type** rather than the trait declaration. A struct or union implements `fn draw(*self)` with `*self`; a [newtype](./new_types.md) implements the same declaration with bare `self`, because a newtype is a scalar with nothing to point at:
+In an `impl`, the receiver form follows the **implementing type** rather than the trait declaration. A plain struct implements `fn draw(*self)` with `*self`. A type that is passed by value implements the same declaration with bare `self`: a [newtype](./new_types.md) or a [fieldless enum](./enums.md#methods), because it is a scalar with nothing to point at, and an [`#[soa]` struct](./attributes.md#soa), whose `self` is the element index:
 
 ```rust
 struct TileId(u8);
 
 impl Drawable for TileId {
-    fn draw(self, x @ X: u16, y @ Y: u16) { }   // bare self -- the newtype's form wins
+    fn draw(self, x: u16, y: u16) { }   // bare self -- the newtype's form wins
     fn get_width(self) -> u8 { return 8; }
 }
 ```
@@ -120,8 +120,8 @@ struct Player {
 }
 
 impl Drawable for Player {
-    fn draw(*self, x @ X: u16, y @ Y: u16) {
-        draw_sprite(self.sprite_id, X, Y);
+    fn draw(*self, x: u16, y: u16) {
+        draw_sprite(self.sprite_id, x, y);
     }
 
     fn get_width(*self) -> u8 {
@@ -133,8 +133,8 @@ impl Drawable for Player {
 ### Rules
 
 1. **Methods without a default body are required**: Every method declared with `;` must be implemented. Methods with a [default body](#default-method-bodies) may be omitted.
-2. **Exact signature match**: Method signatures in the `impl` block must match the trait definition exactly (same parameter types, bindings, and return type).
-3. **TypeId insertion**: The compiler automatically inserts a `__type_id: u8` field at offset 0 of the struct. Newtype implementors get no such field -- see [Newtypes and Traits](#newtypes-and-traits).
+2. **Exact signature match**: Method signatures in the `impl` block must match the trait definition exactly (same parameter types and return type).
+3. **TypeId insertion**: The compiler automatically inserts a `__type_id: u8` field at offset 0 of a plain struct. Newtype, fieldless-enum, and `#[soa]` implementors get no such field and support static dispatch only -- see [Newtypes and Traits](#newtypes-and-traits).
 
 ### Multiple Trait Implementation
 
@@ -148,7 +148,7 @@ struct Enemy {
 }
 
 impl Drawable for Enemy {
-    fn draw(*self, x @ X: u16, y @ Y: u16) { /* ... */ }
+    fn draw(*self, x: u16, y: u16) { /* ... */ }
     fn get_width(*self) -> u8 { return 8; }
 }
 
@@ -230,7 +230,7 @@ p.px();
 
 ### Automatic Insertion
 
-When a struct implements any trait, the compiler inserts a hidden `__type_id: u8` field at offset 0. All declared fields shift by one byte:
+When a plain struct implements any trait, the compiler inserts a hidden `__type_id: u8` field at offset 0 (not for an `#[soa]` struct, which has no contiguous element). All declared fields shift by one byte:
 
 ```rust
 // Source:
@@ -278,13 +278,14 @@ let obj: far *dyn Renderable = &sprite as far *dyn Renderable;
 
 ### Creating Trait Pointers
 
-A concrete struct pointer is coerced to a trait pointer with an explicit `as *dyn Trait` cast:
+A concrete struct pointer coerces to a trait pointer when the target type is known; an explicit `as *dyn Trait` cast is optional:
 
 ```rust
 #[ram]
 static mut PLAYER: Player;
 
-let d: *dyn Drawable = &PLAYER as *dyn Drawable;
+let d: *dyn Drawable = &PLAYER;                  // coerces
+let e: *dyn Drawable = &PLAYER as *dyn Drawable; // same, spelled out
 ```
 
 ### Null Trait Pointers
@@ -422,19 +423,19 @@ Traits can declare compile-time constants that each implementor must define:
 trait Drawable {
     const WIDTH: u8;
     const HEIGHT: u8;
-    fn draw(*self, x @ X: u16, y @ Y: u16);
+    fn draw(*self, x: u16, y: u16);
 }
 
 impl Drawable for Player {
     const WIDTH: u8 = 16;
     const HEIGHT: u8 = 24;
-    fn draw(*self, x @ X: u16, y @ Y: u16) { /* ... */ }
+    fn draw(*self, x: u16, y: u16) { /* ... */ }
 }
 
 impl Drawable for Bullet {
     const WIDTH: u8 = 4;
     const HEIGHT: u8 = 4;
-    fn draw(*self, x @ X: u16, y @ Y: u16) { /* ... */ }
+    fn draw(*self, x: u16, y: u16) { /* ... */ }
 }
 ```
 
@@ -497,7 +498,7 @@ A [newtype](./new_types.md) **may** implement a trait, but only for **static dis
 ```rust
 // OK -- resolved at compile time
 impl Drawable for TileId {
-    fn draw(self, x @ X: u16, y @ Y: u16) { }
+    fn draw(self, x: u16, y: u16) { }
 }
 
 let d: far *dyn Drawable = &t as far *dyn Drawable;
@@ -507,7 +508,7 @@ let d: far *dyn Drawable = &t as far *dyn Drawable;
 - No TypeId field is inserted for a newtype, so `type_id()` and downcasting do not apply.
 - `impl Clone for TileId {}` is rejected as redundant -- a newtype copies with a plain assignment.
 
-In practice the two shapes rarely meet: a trait whose methods take `self` by value can only be implemented by a newtype, and one taking `*self` only by a struct or union, so a trait is naturally either dyn-able or newtype-able.
+In practice the two shapes rarely meet: a trait implemented with by-value `self` (newtypes, fieldless enums, `#[soa]` structs) is used through static dispatch, and one implemented with `*self` by plain structs is the one that is dyn-able.
 
 ## Unions and Traits
 
@@ -524,7 +525,7 @@ The maximum number of distinct struct types with trait implementations is 255 (T
 3. **No associated types**: Only associated constants are supported.
 4. **No trait bounds**: Function signatures cannot require trait implementations.
 5. **Near/far exclusivity**: A struct cannot implement both near and far traits.
-6. **Self by value is newtype-only**: Trait methods are declared with `*self`. Only a [newtype](./new_types.md) implementor substitutes bare `self`; a struct or union cannot.
+6. **Self by value only for by-value types**: Trait methods are declared with `*self`. A newtype, fieldless enum, or `#[soa]` struct implementor substitutes bare `self`; a plain struct cannot.
 
 Supertraits (trait inheritance) **are** supported — see [Trait Inheritance](#trait-inheritance-supertraits).
 
@@ -534,7 +535,7 @@ Supertraits (trait inheritance) **are** supported — see [Trait Inheritance](#t
 
 ```rust
 trait Drawable {
-    fn draw(*self, x @ X: u16, y @ Y: u16);
+    fn draw(*self, x: u16, y: u16);
 }
 
 trait Updatable {
@@ -545,8 +546,8 @@ struct Player { x: u8, y: u8, sprite_id: u8 }
 struct Enemy { x: u8, y: u8, health: u8 }
 
 impl Drawable for Player {
-    fn draw(*self, x @ X: u16, y @ Y: u16) {
-        draw_sprite(self.sprite_id, X, Y);
+    fn draw(*self, x: u16, y: u16) {
+        draw_sprite(self.sprite_id, x, y);
     }
 }
 
@@ -555,8 +556,8 @@ impl Updatable for Player {
 }
 
 impl Drawable for Enemy {
-    fn draw(*self, x @ X: u16, y @ Y: u16) {
-        draw_sprite(0x10, X, Y);
+    fn draw(*self, x: u16, y: u16) {
+        draw_sprite(0x10, x, y);
     }
 }
 
@@ -643,7 +644,7 @@ static mut ptrs: [*dyn Collidable; 3];
 static mut RESULT: [u8; 3] = [0, 0, 0];
 
 #[entry]
-fn main() {
+fn main() -> ! {
     // Build the heterogeneous trait-pointer array
     ptrs[0] = &rects[0] as *dyn Collidable;
     ptrs[1] = &rects[1] as *dyn Collidable;
@@ -662,6 +663,7 @@ fn main() {
         }
     }
     // RESULT = [1, 1, 0] — rects 0 and 1 overlap; rect 2 is isolated
+    loop {}
 }
 ```
 

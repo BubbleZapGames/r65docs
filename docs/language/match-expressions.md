@@ -201,6 +201,22 @@ match state {
 }
 ```
 
+A `match` in statement position is still an expression, so when another statement follows it, it must end in `};`. Only a `match` that is the last thing in its block can drop the `;`:
+
+```rust
+fn music_play(track: u8) {
+    match track {
+        0 => { load_song(0); }
+        _ => { return; }
+    };                       // required: a statement follows
+    CURRENT_TRACK = track;
+}
+```
+
+Without the `;` the parser stops at the next statement with `unexpected token ... expected ;, }`. (`if` has a statement form of its own and needs no `;`; `loop`, `while` and `for` are statements outright.)
+
+To test a single pattern, [`if let`, `while let` and `let ... else`](./control-flow.md#if-let-while-let-and-let--else) are shorthand for a two-arm match.
+
 ---
 
 ## Examples
@@ -228,7 +244,7 @@ fn main() -> ! {
             GameState::GameOver => {
                 update_game_over();
             },
-        }
+        };
 
         render();
         wait_vblank();

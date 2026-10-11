@@ -26,8 +26,8 @@ Storage class attributes apply to `static mut` variables and determine where in 
 
 | Attribute | Address Range | Speed |
 |-----------|--------------|-------|
-| `#[zeropage]` | `$0000–$00FF` | 2–3 cycles |
-| `#[lowram]` | `$0000–$1FFF` | 3–4 cycles |
+| `#[zeropage]` | `$0000–$00FF` | 3–4 cycles |
+| `#[lowram]` | `$0000–$1FFF` | 4–5 cycles |
 | `#[ram]` | `$7E2000–$7FFFFF` | 4–5 cycles |
 | `#[hw(addr)]` | Hardware I/O | 4–6 cycles |
 | `#[stack(lo, hi)]` | Reserved region | — |
@@ -163,7 +163,7 @@ fn main() -> ! {
 }
 ```
 
-The entry function must return `-> !` because it never returns to a caller.
+The entry function is conventionally declared `-> !`, since there is no caller to return to. It is not required: if control can reach the end of the entry function, the compiler appends a branch-to-self halt loop.
 
 ---
 
@@ -212,7 +212,7 @@ fn full_context_save(value @ A: u8) { ... }
 
 ### `#[interrupt(vector)]`
 
-Declares a function as an interrupt handler. The compiler wraps it with `PHP`/`PLP`, saves and restores all live registers, and emits `RTI` instead of `RTS`/`RTL`.
+Declares a function as an interrupt handler. The body runs in the default m8/x16 mode, the compiler saves and restores the registers the body modifies (all of them if the body calls a function or uses `asm!`), and the handler ends in `RTI` instead of `RTS`/`RTL`. The processor status needs no explicit save: `RTI` restores it, mode bits included.
 
 ```rust
 #[interrupt(nmi)]
@@ -235,23 +235,21 @@ fn vblank_handler() {
 
 | Parameter | Default | Effect |
 |-----------|---------|--------|
-| `preserve` | `true` | `true` — auto-save/restore all live registers; `false` — manual control |
+| `preserve` | `true` | `true` — save/restore the registers the body modifies; `false` — no saves, manual control |
 
 ```rust
-// Default: full register preservation
+// Default: the registers the body modifies are saved
 #[interrupt(nmi)]
 fn vblank_handler() { ... }
 
-// Manual: programmer responsible for saving registers
+// Manual: no saves; the programmer saves whatever the body touches
 #[interrupt(irq, preserve=false)]
 fn fast_irq() {
-    asm!("PHP");
     // minimal work
-    asm!("PLP");
 }
 ```
 
-Use `preserve=false` only when interrupt latency is critical and you are certain which registers need saving.
+Either way the compiler emits the closing `RTI`. Use `preserve=false` only when interrupt latency is critical and you are certain which registers need saving.
 
 ---
 
@@ -282,7 +280,7 @@ far fn flexible() { }       // Compiler chooses bank
 **Rules:**
 - Near functions (`fn`) must be in the same bank as their callers. The compiler rejects cross-bank near calls.
 - Far functions (`far fn`) are callable from any bank. Methods in `impl`/`trait` blocks are far by default; `near fn` opts out (see [Functions](functions.md#methods)).
-- In `#[bank(auto)]` mode, all free functions must be `far fn`, methods must not be `near fn`, and all statics must be `far static`.
+- In `#[bank(auto)]` mode, all free functions must be `far fn`, methods must not be `near fn`, and all immutable (ROM) statics must be `far static`.
 
 ---
 
@@ -324,7 +322,7 @@ asm!("PLB");
 
 ### `#[snesrom(...)]`
 
-Configures the SNES ROM header. Must appear once in the program, typically near the entry point. All parameters are named.
+Configures the SNES ROM header. It is a standalone attribute — it attaches to nothing — written at most once, typically at the top of the main file. It is optional: without it the compiler emits a default header. All parameters are named.
 
 ```rust
 #[snesrom(
@@ -336,7 +334,6 @@ Configures the SNES ROM header. Must appear once in the program, typically near 
     cartridge_type = 0,
     sram_size = 0
 )]
-fn rom_header() { }
 ```
 
 **Map mode parameters (mutually exclusive):**
@@ -371,7 +368,7 @@ See [SNES ROM Header](../platform/snes-rom-header.md) for the full region code a
 
 ## `#[cfg(...)]`
 
-Conditionally includes a declaration based on the build target or feature flags. Currently only the `snes` target is predefined.
+Conditionally includes a declaration based on configuration flags set with `--cfg` (`r65c game.r65 --cfg snes`). No flag is predefined; a project created by `r65x init` passes `--cfg snes` from its Makefile. In an expression, use [`cfg!(flag)`](../platform/builtin_library.md#conditional-compilation).
 
 ```rust
 #[cfg(snes)]
@@ -453,7 +450,26 @@ impl Enemy {
 POOL[i].step();               // passes the index
 ```
 
-`self` is an ordinary `u16`, so `if self == 0`, `other_fn(self)`, and `POOL[self].kind` all work. `*self` on an `#[soa]` method is an error — there is no address to take — and a trait declared with `*self` is still implemented with bare `self`, the same rule [newtypes](./new_types.md) follow. Because `self` holds the index for the whole body, an `#[soa]` method may not bind a parameter to `X`.
+`self` is an ordinary `u16`, so `if self == 0`, `other_fn(self)`, and `POOL[self].kind` all work — except on a struct that is a tagged enum's payload, whose `self` is an element rather than a number (see [enums](./enums.md#a-payloads-self-is-not-a-number)). `*self` on an `#[soa]` method is an error — there is no address to take — and a trait declared with `*self` is still implemented with bare `self`, the same rule [newtypes](./new_types.md) follow. Because `self` holds the index for the whole body, an `#[soa]` method may not bind a parameter to `X`.
+
+**Inlined on a constant element.** A method marked `#[inline(always)]` and called on a constant element — `POOL[0].step()`, `PLAYER.step()` — compiles to the same code as writing `POOL[0].x` directly: every field access becomes a fixed address with no index register load. Called on a variable element it is an ordinary indexed access.
+
+**Initializers.** An array literal on an `#[soa]` static is transposed into one array per field. On an immutable static that is one ROM table per field — the natural shape for a per-kind constant table indexed by a tag, where each column is read with the index scaled by that field's width alone:
+
+```rust
+#[soa]
+struct Area { id: u8, exits: u16, flags: u8 }
+
+static AREAS: [Area; 3] = [
+    Area { id: 0, exits: 3, flags: 0x01 },
+    Area { id: 1, exits: 1, flags: 0x00 },
+    Area { id: 2, exits: 2, flags: 0x04 },
+];
+
+let n: u16 = AREAS[i].exits;
+```
+
+On a `static mut` each plane is block-copied from its ROM column at startup, as a plain array literal would be. Each element must be a literal of the struct naming every field once. A fill (`[E { .. }; N]`, `[0; N]`) is rejected, and an immutable `#[soa]` static must have a literal.
 
 **Layout.** A field plane's stride is the field's size, except that a 3- or 7-byte field (a `far *T`, for instance) is padded to 4 or 8 — one byte per element buys a power-of-two scale. Auto-allocated planes are placed by the normal allocator and may not be adjacent; an explicitly addressed static lays its planes out consecutively from that address, so the memory map stays writable by hand:
 
@@ -473,17 +489,32 @@ static mut POOL: [Enemy; 8];
 | Construct | Write instead |
 |-----------|---------------|
 | `&POOL[i]`, `&POOL` | Pass the index |
+| `&POOL[i].field`, `&self.field` | Read or write the field directly, or copy it to a local — a plane's next byte is the next element's field |
 | a local, parameter, or plain-struct field of the type | Hold a `u16` index |
 | `E = POOL[i]` (whole-element copy), `impl Clone` | Copy the fields |
 | `fn m(*self)` | `fn m(self)` |
 | a second static of the type | Merge the pools — methods hard-code one pool's planes |
 | `#[soa]` on a union or a newtype | — |
-| an initializer on the static | Assign at runtime (transposing a literal is not implemented yet) |
+| a fill initializer `[..; N]` | Write the array literal out, or assign at runtime |
+| `static POOL: [E; N];` with no initializer | Add `mut`, or an array literal |
 | `*dyn Trait` over an element | Static dispatch only |
 
 Trait impls with static dispatch, methods with arguments, and methods calling other methods on `self` all work. A field may be a [tagged enum](./enums.md#a-field-of-an-soa-struct), which contributes its own tag and payload planes, and an `#[soa]` struct may itself be a tagged enum's [payload](./enums.md#soa-payloads).
 
 `asm!` bodies cannot see the layout — name a field plane (`POOL__hp`) rather than `POOL`. `size_of(Enemy)` still returns the packed sum, which is no longer a stride.
+
+---
+
+## `#[used]`
+
+A function nothing calls is removed by dead function elimination. `#[used]` keeps it, for a caller the compiler cannot see — a debugger's `jump`, as a test does to swap one call for another at a function's entry:
+
+```rust
+#[used]
+fn boot_harness() -> u8 { return MISSION_HARNESS; }
+```
+
+A `#[used]` function is a root like `#[entry]`, so everything it calls is kept too.
 
 ---
 
@@ -525,7 +556,8 @@ struct P { x: u8 }
 | `#[mode(databank=none)]` | `far fn` | No DBR management (default) |
 | `#[mode(databank=inline)]` | `far fn` | Callee saves/sets/restores DBR |
 | `#[mode(databank=caller)]` | `far fn` | Caller manages DBR |
-| `#[snesrom(...)]` | `fn` | SNES ROM header configuration |
+| `#[snesrom(...)]` | *(standalone)* | SNES ROM header configuration |
 | `#[cfg(target)]` | Any item | Conditional compilation |
 | `#[inline]` / `#[inline(always)]` / `#[inline(never)]` | `fn`, method | Inlining hint or directive |
+| `#[used]` | `fn` | Keep a function nothing calls |
 | `#[soa]` | `struct` | Store every static of the struct as one array per field |

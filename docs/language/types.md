@@ -22,7 +22,7 @@ R65 provides a minimal type system designed around the 65816 processor's registe
 All integer arithmetic wraps on overflow. There is no runtime range checking.
 
 ```rust
-let x: u8 = 255;
+let mut x: u8 = 255;
 x = x + 1;      // Wraps to 0
 ```
 
@@ -217,7 +217,7 @@ Pointers are raw memory addresses with no metadata, bounds, or ownership trackin
 #### Near Pointers
 
 ```rust
-let ptr: *u8 = 0x2000;    // 2 bytes, 16-bit address within current data bank
+let ptr: *u8 = 0x2000 as *u8;    // 2 bytes, 16-bit address within current data bank
 ```
 
 Near pointers address 64KB within the current Data Bank Register (DBR).
@@ -225,7 +225,7 @@ Near pointers address 64KB within the current Data Bank Register (DBR).
 #### Far Pointers
 
 ```rust
-let ptr: far *u8 = 0x01_2000;   // 3 bytes, 24-bit address (includes bank)
+let ptr: far *u8 = 0x01_2000 as far *u8;   // 3 bytes, 24-bit address (includes bank)
 ```
 
 Far pointers address the full 16MB address space.
@@ -337,7 +337,7 @@ Multi-return values cannot be stored directly in variables outside of a call sit
 
 ### Never Type
 
-The never type `!` indicates a function that never returns. Instead of a normal `RTS`/`RTL`, the compiler emits a branch-to-self infinite loop (`BRA $`) at the end of the function — there's no valid return address to return to, and a stray return would fall through to whatever bytes follow in ROM.
+The never type `!` indicates a function that never returns. The compiler emits no `RTS`/`RTL`; if control can reach the end of the function or a `return`, it emits a branch-to-self halt loop there instead — there's no valid return address to return to, and a stray return would fall through to whatever bytes follow in ROM. Reaching the end of a `-> !` function is not a compile error.
 
 ```rust
 fn main_loop() -> ! {
@@ -381,7 +381,7 @@ let w: Word = 0x1234;     // Same as: let w: u16 = 0x1234;
 
 ## Type Conversions
 
-All type conversions require the explicit `as` keyword. There are no implicit conversions between types, with the exception of integer promotion in binary expressions (see below).
+All type conversions require the explicit `as` keyword. There are no implicit conversions between types, with two exceptions: integer promotion in binary expressions, and a fieldless enum used where an integer of its width is expected (see [Type Checking Rules](#type-checking-rules)). This is the one cast table; other pages link here.
 
 ### Cast Behaviors
 
@@ -393,12 +393,13 @@ All type conversions require the explicit `as` keyword. There are no implicit co
 | `u8 as i8`         | Reinterpret bits  | 0 cycles      |
 | `i8 as u8`         | Reinterpret bits  | 0 cycles      |
 | `bool as u8`       | `false` = 0, `true` = 1 | 0 cycles |
-| `u8 as bool`       | 0 = `false`, non-zero = `true` | 0 cycles |
+| `u8 as bool`       | 0 = `false`, non-zero = `true` (normalized to 0/1) | ~6 cycles |
 | `*T as *U`         | Pointer reinterpret | 0 cycles    |
 | `*T as u16`        | Pointer to integer | 0 cycles     |
 | `u16 as *T`        | Integer to pointer | 0 cycles     |
 | `far *T as u16`    | Truncate (drop bank) | 0 cycles   |
 | `Enum as u8`/`u16` | Enum to underlying integer | 0 cycles |
+| `u8 as Enum`/`u16 as Enum` | Reinterpret as the discriminant, no range check | 0 cycles |
 | `Newtype as T`     | Unwrap to the payload | 0 cycles |
 | `T as Newtype`     | Wrap, truncating if the payload is narrower | 0 cycles |
 | `Newtype as Newtype` | Through the payloads, truncating if narrower | 0 cycles |
@@ -416,18 +417,18 @@ let wide_s: i16 = signed as i16; // Sign-extend: 0xFFFB
 
 ### Integer Assignment
 
-Integer types are compatible with each other for assignment. Explicit casts are recommended but not strictly required for integer-to-integer assignment:
+Assigning between integer types of different widths or signedness requires `as`. Narrowing is never implicit — truncation must be visible in the source:
 
 ```rust
-let a: u8 = 10;
-let b: u16 = 20;
+let mut a: u8 = 10;
+let mut b: u16 = 20;
 
-b = a;            // OK: integer types are compatible
-a = b;            // OK: truncates (programmer's responsibility)
-b = a as u16;     // Preferred: explicit cast makes intent clear
+b = a as u16;     // OK: zero-extend
+a = b as u8;      // OK: truncate (programmer's responsibility)
+// a = b;         // ERROR: u16 does not match u8
 ```
 
-Non-integer types (pointers, structs, unions, enums) require exact type matches.
+A fieldless enum is accepted wherever an integer of its width is (see [Enums](./enums.md#representation)). Other non-integer types (pointers, structs, unions, tagged enums) require exact type matches.
 
 ### Newtypes: Transparent In, Opaque Out
 
@@ -461,9 +462,9 @@ This applies to arithmetic (`+`, `-`), bitwise (`&`, `|`, `^`), and comparison (
 Pointer types must match exactly. Near and far pointers are distinct types, as are pointers to different element types:
 
 ```rust
-let p1: *u8 = 0x2000;
-let p2: *u16 = 0x3000;
-let p3: far *u8 = 0x01_2000;
+let mut p1: *u8 = 0x2000 as *u8;
+let p2: *u16 = 0x3000 as *u16;
+let p3: far *u8 = 0x01_2000 as far *u8;
 
 // p1 = p2;    // ERROR: *u8 vs *u16
 // p1 = p3;    // ERROR: *u8 vs far *u8
@@ -518,7 +519,7 @@ let hp = PTR.health;  // Auto-dereferences: (*PTR).health
 
 ## Type Inference
 
-R65 has very limited type inference.
+R65 has limited, local type inference.
 
 ### What Is Inferred
 
@@ -528,6 +529,18 @@ R65 has very limited type inference.
 let x: u8 = 10;     // 10 inferred as u8
 let y: u16 = 1000;  // 1000 inferred as u16
 ```
+
+**Local variable types** are taken from the initializer when the annotation is omitted. A bare integer literal gets the smallest type that holds it — `u8`, then `u16` for non-negative values, `i8`, then `i16` for negative ones:
+
+```rust
+let a = 10;          // u8
+let b = 1000;        // u16
+let c = -5;          // i8
+let d = SCORE + 1;   // the type of SCORE + 1
+let p = &BUFFER;     // the pointer type of &BUFFER
+```
+
+Annotate when you want a wider type than the literal suggests: `let n = 10;` is a `u8` and wraps at 255.
 
 **Register alias types** are inferred from the register's current type:
 
@@ -543,11 +556,7 @@ fn wide(input @ A: u16) {
 
 ### What Is Not Inferred
 
-- Variable types without a register binding or explicit annotation
+- The type of a variable declared without an initializer — `let mut t: u8;` needs its annotation
 - Function return types
 - Function parameter types
-
-```rust
-// let z = 10;   // ERROR: cannot infer type without annotation
-let z: u8 = 10;  // OK: explicit type
-```
+- Static and constant types

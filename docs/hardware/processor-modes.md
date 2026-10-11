@@ -26,7 +26,7 @@ The X bit controls the size of the X and Y index registers. **R65 always operate
 | X Bit | Mode | X/Y Registers |
 |-------|------|---------------|
 | 0 | x16 (always) | 16-bit (`u16`) |
-| 1 | x8 (never used) | 8-bit -- R65 never uses this mode |
+| 1 | x8 | 8-bit -- only inside a `STATUS.XY16 = false` region, which the compiler validates (see [Registers](./registers.md)) |
 
 ## Automatic Mode Inference
 
@@ -199,7 +199,7 @@ fn vblank_handler() {
 }
 ```
 
-The interrupt prologue saves STATUS via `PHP`, and `RTI` restores it. The handler body executes in the default mode.
+The CPU pushes STATUS when it takes the interrupt and `RTI` pulls it back, so no `PHP`/`PLP` is needed. The handler body executes in the default mode.
 
 ## Design Rationale
 

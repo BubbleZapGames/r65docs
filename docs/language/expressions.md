@@ -9,7 +9,7 @@ description: R65 operators, precedence, type casts, and expression evaluation.
 R65 provides operators and functions that clearly distinguish between hardware-supported operations (fast) and software-implemented operations (slow).
 
 - **Operators** (`+`, `-`, `*`, `/`, `<<`, `>>`, etc.) map directly to 65816 instructions or short instruction sequences. Cost: 2--10 cycles.
-- **Functions** (`mul8()`/`mul16()`, `div8()`/`div16()`, `mod8()`, `shl8()`/`shl16()`, `shr8()`/`shr16()`) are software subroutines for operations the hardware cannot perform in a fixed number of instructions. Cost: 20--200+ cycles.
+- **Functions** (`mul8()`/`mul16()`, `div8()`/`div16()`, `mod8()`, `shl8()`/`shl16()`, `shr8()`/`shr16()`) are standard-library subroutines in `math.r65` for operations the instructions cannot do directly. They need `include!("lib/math.r65")`. Cost: ~8--30 cycles on the SNES hardware math units, hundreds in software — see [Math Library](../platform/math.md).
 
 All arithmetic is **unchecked**. Overflow wraps, underflow wraps, and division by zero is undefined behavior. There are no runtime checks.
 
@@ -34,7 +34,7 @@ All arithmetic is **unchecked**. Overflow wraps, underflow wraps, and division b
 | Divide assign | `/=` | Right operand must be power-of-2 constant (1–256) | 2--16 |
 | Increment | `x++` | Postfix only, statement-only | 2--6 |
 | Decrement | `x--` | Postfix only, statement-only | 2--6 |
-| Type cast | `as` | See [Type Casts](#type-casts) | 0--8 |
+| Type cast | `as` | See [Type Conversions](./types.md#type-conversions) | 0--8 |
 
 ---
 
@@ -90,7 +90,7 @@ Both signed and unsigned division use logical right shift. Arithmetic right shif
 For general division, use the `div8()` / `div16()` functions.
 
 :::note
-The `%` (modulo) operator is parsed but **not supported** at code generation. Use the `mod8()` function instead. For power-of-2 modulo, prefer bitwise AND: `a & 0xFF` is equivalent to `mod8(a, 256)`.
+The `%` (modulo) operator is **not supported** — it is a compile error. Use `mod8()` / `mod16()` (SNES builds) or `mod_shift()` (non-SNES builds) from [`math.r65`](../platform/math.md#division-and-modulo). For power-of-2 modulo, prefer bitwise AND: `a & 0x0F` is `a` modulo 16.
 :::
 
 ---
@@ -142,7 +142,7 @@ flags = flags ^ 0x80;              // Toggle bit 7
 
 ## Comparison Operators
 
-All six comparison operators produce `bool` results. Both operands must be the same type.
+All six comparison operators produce `bool` results. Mixed-width integer operands are widened as for any binary operator (see [Implicit Integer Promotion](./types.md#implicit-integer-promotion)).
 
 | Operator | Meaning | Unsigned Cycles | Signed Cycles |
 |---|---|---|---|
@@ -288,24 +288,7 @@ String concatenation has zero runtime cost.
 
 ## Type Casts
 
-The `as` keyword performs explicit type conversions. No implicit conversions occur in R65 (except integer promotion in binary expressions).
-
-### Cast Behavior
-
-| Cast | Behavior | Cost |
-|---|---|---|
-| `u8 as u16` | Zero-extend (high byte = 0) | 2--4 cycles |
-| `i8 as i16` | Sign-extend (high byte = sign bit) | 4--8 cycles |
-| `u16 as u8` | Truncate (keep low byte) | 0--2 cycles |
-| `u8 as i8` | Reinterpret bits (no codegen) | 0 cycles |
-| `i8 as u8` | Reinterpret bits (no codegen) | 0 cycles |
-| `bool as u8` | `false` = 0, `true` = 1 | 0 cycles |
-| `u8 as bool` | 0 = `false`, non-zero = `true` | 0 cycles |
-| `*T as *U` | Pointer reinterpret | 0 cycles |
-| `*T as u16` | Pointer to integer | 0 cycles |
-| `u16 as *T` | Integer to pointer | 0 cycles |
-| `far *T as u16` | Far pointer truncated to 16-bit | 0--2 cycles |
-| `Enum as u8` | Enum to underlying integer | 0 cycles |
+The `as` keyword performs explicit type conversions. No implicit conversions occur in R65, except integer promotion in binary expressions and a fieldless enum used as an integer of its width. The full table of casts, their behavior and their cost is in [Types — Type Conversions](./types.md#type-conversions).
 
 ### Examples
 
@@ -338,64 +321,64 @@ Operators are listed from highest precedence (evaluated first) to lowest. Operat
 
 | Precedence | Category | Operators |
 |---|---|---|
-| 1 (highest) | Unary | `-` (negate), `~`, `!` |
-| 2 | Multiplicative | `*`, `/` |
-| 3 | Additive | `+`, `-` |
-| 4 | Shift | `<<`, `>>` |
-| 5 | Comparison | `<`, `<=`, `>`, `>=` |
-| 6 | Equality | `==`, `!=` |
-| 7 | Bitwise AND | `&` |
-| 8 | Bitwise XOR | `^` |
-| 9 | Bitwise OR | `\|` |
-| 10 | Logical AND | `&&` |
-| 11 | Logical OR | `\|\|` |
-| 12 (lowest) | Assignment | `=`, `+=`, `-=`, `*=`, `/=`, `&=`, `\|=`, `^=`, `<<=`, `>>=` |
+| 1 (highest) | Unary | `-` (negate), `~`, `!`, `*` (deref), `&` (address-of) |
+| 2 | Cast | `as` |
+| 3 | Multiplicative | `*`, `/` |
+| 4 | Additive | `+`, `-` |
+| 5 | Shift | `<<`, `>>` |
+| 6 | Bitwise AND | `&` |
+| 7 | Bitwise XOR | `^` |
+| 8 | Bitwise OR | `\|` |
+| 9 | Comparison | `<`, `<=`, `>`, `>=` |
+| 10 | Equality | `==`, `!=` |
+| 11 | Logical AND | `&&` |
+| 12 | Logical OR | `\|\|` |
+| 13 (lowest) | Assignment | `=`, `+=`, `-=`, `*=`, `/=`, `&=`, `\|=`, `^=`, `<<=`, `>>=` |
+
+As in Rust, the bitwise operators bind tighter than comparisons, so `flags & 0x80 != 0` means `(flags & 0x80) != 0`. Function calls, indexing and field access bind tighter than any operator.
 
 Use parentheses to override precedence:
 
 ```rust
 let x = (a + b) * 2;       // Addition first, then multiply
 let y = a & (b | c);       // OR first, then AND
-let z = (flags & 0x80) != 0;  // Mask first, then compare
+let z = (flags & 0x80) != 0;  // Same as flags & 0x80 != 0; the parentheses are for the reader
 ```
-
-Function calls (`mul8()`, `div8()`, etc.) have higher precedence than all operators, as with any function call expression.
 
 ---
 
 ## Software Functions for Expensive Operations
 
-When an operation cannot be expressed with the restricted operators, use the corresponding built-in function.
+When an operation cannot be expressed with the restricted operators, call the corresponding function from the standard library's `math.r65` (`include!("lib/math.r65")`). They are ordinary `far fn`s; the [Math Library](../platform/math.md#scalar-math-functions) page has the full signatures.
 
 ### Summary
 
-| Function | Operation | Cost |
+| Function | Signature | Cost |
 |---|---|---|
-| `mul8(a, b)` / `mul16(a, b)` | General multiplication | 20--100+ cycles |
-| `div8(a, b)` / `div16(a, b)` | General division | 50--200+ cycles |
-| `mod8(a, b)` | Remainder after division | 50--200+ cycles |
-| `shl8(a, n)` / `shl16(a, n)` | Variable left shift | ~8 + 6n cycles |
-| `shr8(a, n)` / `shr16(a, n)` | Variable right shift | ~8 + 6n cycles |
+| `mul8` | `(a @ A: u8, b @ B: u8) -> u16` — full 16-bit product | ~8 cycles (SNES hardware), ~150--300 (software) |
+| `mul16` | `(a @ A: u16, b: u16) -> u16` — low 16 bits | ~8 cycles (SNES hardware), ~150--300 (software) |
+| `div8` / `mod8` | `(dividend @ A: u8, divisor @ X: u16) -> u8` | ~30 cycles (SNES hardware), ~200--400 (`div8` in software) |
+| `div16` / `mod16` | `(dividend @ A: u16, divisor: u8) -> u16` | ~30 cycles (SNES hardware) |
+| `shl8` / `shr8` / `shri8` | `(value @ A: u8, amount @ X: u16) -> u8` | grows linearly with `amount` |
+| `shl16` / `shr16` | `(value @ A: u16, amount @ X: u16) -> u16` | grows linearly with `amount` |
 
-All functions require both operands to be the same type (except the shift amount for `shl8`/`shr8`, which is `u8`).
+`div16`, `mod16` and `mod8` exist only in SNES builds (`--cfg snes`), where the hardware math units are available; a non-SNES build uses `mod_shift` for modulo.
 
 ### mul8() / mul16()
 
-General-purpose multiplication. Both operands must be the same integer type. The result is truncated to the operand size.
+General-purpose multiplication. `mul8` returns the full 16-bit product of two bytes; `mul16` returns the low 16 bits.
 
 ```rust
-let area: u8 = mul8(width, height);
-let offset: u16 = mul16(y as u16, 320 as u16);
+let area: u16 = mul8(width, height);
+let offset: u16 = mul16(y as u16, 320);
 ```
-
-With `--cfg snes`, 8-bit multiplication uses the SNES hardware multiplier for faster results.
 
 ### div8() / div16()
 
 General-purpose division. Division by zero is undefined behavior.
 
 ```rust
-let avg: u8 = div8(sum, count);
+let avg: u8 = div8(sum, count as u16);
 let tiles: u8 = div8(pixels, 7);
 ```
 
@@ -404,22 +387,22 @@ let tiles: u8 = div8(pixels, 7);
 Returns the remainder after division. Division by zero is undefined behavior.
 
 ```rust
-let remainder: u8 = mod8(distance, tile_size);
+let remainder: u8 = mod8(distance, tile_size as u16);
 
 // Prefer bitwise AND for power-of-2 modulo:
-let wrapped: u8 = index & 0xFF;    // Same as mod8(index, 256), much faster
+let wrapped: u8 = index & 0x0F;    // Same as mod8(index, 16), much faster
 ```
 
 ### shl8() / shl16() and shr8() / shr16()
 
-Variable shift amounts. The shift amount is `u8` and can be a runtime value.
+Variable shift amounts. The amount is passed in `X` as a `u16` and can be a runtime value.
 
 ```rust
 let shifted: u8 = shl8(value, bit_pos);     // Variable left shift
 let extracted: u8 = shr8(flags, offset);     // Variable right shift
 ```
 
-For signed operands, `shri8()` performs an arithmetic right shift (preserves the sign bit). For unsigned operands, `shr8()` / `shr16()` perform a logical right shift (fills with zeros).
+`shr8()` / `shr16()` perform a logical right shift (fills with zeros); `shri8()` performs an arithmetic right shift that preserves the sign bit.
 
 :::tip
 If the shift amount is a compile-time constant, prefer the `<<` and `>>` operators. They compile to inline instructions and avoid the subroutine call overhead.
@@ -436,11 +419,11 @@ let halved: u8 = value / 2;            // LSR (2 cycles)
 let shifted: u8 = value << 5;          // 5x ASL (10 cycles)
 let masked: u8 = value & 0x1F;         // AND #$1F (2-4 cycles)
 
-// SLOW: function compiles to a subroutine call
-let product: u8 = mul8(value, 7);       // JSR __mul_u8 (20-100+ cycles)
-let quotient: u8 = div8(value, 3);      // JSR __div_u8 (50-200+ cycles)
-let remainder: u8 = mod8(value, 5);     // JSR __mod_u8 (50-200+ cycles)
-let shifted: u8 = shl8(value, amount);  // JSR __shl_u8 (~8 + 6*amount cycles)
+// SLOWER: function compiles to a subroutine call (see the costs above)
+let product: u16 = mul8(value, 7);
+let quotient: u8 = div8(value, 3);
+let remainder: u8 = mod8(value, 5);     // SNES builds only
+let shifted: u8 = shl8(value, amount);
 ```
 
 **Guidelines:**
@@ -462,7 +445,6 @@ All operations wrap silently. There are no overflow traps, checked arithmetic, o
 let x: u8 = 255 + 1;       // 0 (wraps)
 let y: u8 = 0 - 1;         // 255 (wraps)
 let z: i8 = 127 + 1;       // -128 (wraps)
-let w: u8 = mul8(200, 2);   // 144 (400 truncated to u8)
 ```
 
 Division by zero is undefined behavior at runtime. Constant division by zero is caught at compile time.
