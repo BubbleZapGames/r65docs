@@ -1,6 +1,6 @@
 # R65 Playground — Design Document
 
-A browser-based R65 compiler playground at `r65lang.dev/playground`, integrated into the existing Docusaurus documentation site. Users write R65 source code and see compiled WLA-DX assembly output — no backend required.
+A browser-based R65 compiler playground at `r65.dev/playground`, integrated into the existing Docusaurus documentation site. Users write R65 source code and see compiled WLA-DX assembly output — no backend required.
 
 ## Goals
 
@@ -551,7 +551,7 @@ Dropdown to select `-O0` / `-O1` / `-O2`, mapping to the compiler's optimization
 Encode the source code in the URL hash as base64 so users can share playground links:
 
 ```
-r65lang.dev/playground#base64encodedSource
+r65.dev/playground#base64encodedSource
 ```
 
 On load, decode the hash and populate the editor. Keeps URLs bookmarkable and shareable without any backend.

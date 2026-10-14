@@ -11,7 +11,7 @@ const config = {
     v4: true,
   },
 
-  url: 'https://r65lang.dev',
+  url: 'https://r65.dev',
   baseUrl: '/',
 
   organizationName: 'BubbleZapGames',
