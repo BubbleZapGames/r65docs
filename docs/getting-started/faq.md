@@ -146,6 +146,24 @@ let quotient = div8(a, b);  // ~30 cycles on SNES hardware, ~200-400 in software
 
 With `--cfg snes`, they use the SNES hardware multiplier and divider. `mod8`, `div16`, and `mod16` are SNES-only. See the [math documentation](../platform/math.md) for full details.
 
+### Why are there no `u32` or `i32` primitive types?
+
+The 65816's widest register is 16 bits, so R65's primitive types stop at `u16`/`i16`. A 32-bit value can't be held in a register, and every operation on it takes multiple instructions — an add, for example, is two 16-bit adds chained through the carry flag. Making that a primitive would hide the cost behind a plain `+`.
+
+When you need 32 bits, the standard library provides `U32` and `I32` as structs of two `u16` words, with the compound-assignment and comparison operators implemented:
+
+```rust
+include!("lib/U32.r65")
+
+#[ram] static mut SCORE: U32 = U32!(100000);
+#[ram] static mut BONUS: U32 = U32!(500);
+
+SCORE += BONUS;
+if SCORE > BONUS { }
+```
+
+See the [math documentation](../platform/math.md) for the full API.
+
 ### Why are X and Y always 16-bit?
 
 R65 keeps the processor in x16 mode permanently. Mixed 8/16 index modes cause subtle bugs with stack-relative addressing and push/pull operations. The complexity of tracking index register width alongside accumulator width is rarely worth the 1-byte savings on index loads. If you really need 8-bit index mode you can temporarily set the `STATUS.XY16` register to `false` or make custom assembly routines but note the compiler will complain about any unsafe usages.
