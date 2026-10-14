@@ -1,0 +1,15 @@
+announcements:
+  label: Announcements
+  description: News about the R65 language and compiler.
+
+r65:
+  label: R65
+  description: Posts about the R65 language.
+
+snes:
+  label: SNES
+  description: Super Nintendo development notes.
+
+design:
+  label: Design
+  description: Why R65 works the way it does.

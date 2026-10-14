@@ -34,7 +34,20 @@ const config = {
           sidebarPath: './sidebars.js',
           editUrl: 'https://github.com/BubbleZapGames/r65docs/tree/main/',
         },
-        blog: false,
+        blog: {
+          showReadingTime: true,
+          blogTitle: 'R65 Blog',
+          blogDescription: 'News, deep dives and SNES development notes from the R65 project.',
+          blogSidebarTitle: 'Recent posts',
+          blogSidebarCount: 'ALL',
+          feedOptions: {
+            type: ['rss', 'atom'],
+            xslt: true,
+          },
+          onInlineTags: 'warn',
+          onInlineAuthors: 'warn',
+          onUntruncatedBlogPosts: 'warn',
+        },
         theme: {
           customCss: './src/css/custom.css',
         },
@@ -70,6 +83,11 @@ const config = {
           {
             to: '/examples',
             label: 'Examples',
+            position: 'left',
+          },
+          {
+            to: '/blog',
+            label: 'Blog',
             position: 'left',
           },
           {
@@ -119,6 +137,10 @@ const config = {
           {
             title: 'More',
             items: [
+              {
+                label: 'Blog',
+                to: '/blog',
+              },
               {
                 label: 'GitHub',
                 href: 'https://github.com/BubbleZapGames/r65docs',
