@@ -370,7 +370,7 @@ R65 uses the following operator and punctuation tokens:
 
 | Token | Meaning |
 |-------|---------|
-| `+` `-` `*` `/` | Arithmetic (`%` is rejected — use `mod8()`) |
+| `+` `-` `*` `/` `%` | Arithmetic (`%` only at compile time — use `mod8()` at runtime) |
 | `&` `\|` `^` `~` | Bitwise |
 | `<<` `>>` | Shift |
 | `==` `!=` `<` `>` `<=` `>=` | Comparison |

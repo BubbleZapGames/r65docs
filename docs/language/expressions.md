@@ -90,7 +90,11 @@ Both signed and unsigned division use logical right shift. Arithmetic right shif
 For general division, use the `div8()` / `div16()` functions.
 
 :::note
-The `%` (modulo) operator is **not supported** — it is a compile error. Use `mod8()` / `mod16()` (SNES builds) or `mod_shift()` (non-SNES builds) from [`math.r65`](../platform/math.md#division-and-modulo). For power-of-2 modulo, prefer bitwise AND: `a & 0x0F` is `a` modulo 16.
+The `%` (modulo) operator exists only at compile time: in a [`const fn`](functions.md#const-functions) body and between constants. Anywhere else it is a compile error. At runtime use `mod8()` / `mod16()` (SNES builds) or `mod_shift()` (non-SNES builds) from [`math.r65`](../platform/math.md#division-and-modulo). For power-of-2 modulo, prefer bitwise AND: `a & 0x0F` is `a` modulo 16.
+:::
+
+:::tip Constants are unrestricted
+The power-of-2 rules for `*` and `/` exist because of the code a runtime operation needs. Where no code is generated they don't apply: an expression whose operands are all constants, such as `const H: u16 = W * 13 / 3 % 10;`, is computed by the compiler, and so is everything inside a `const fn` called with constant arguments. Compile-time `/` and `%` truncate toward zero, so `-7 / 2` is `-3` and `-7 % 2` is `-1`.
 :::
 
 ---
@@ -227,7 +231,7 @@ a /= 4;         // a = a / 4 (power of 2, 1–256)
 
 a *= b;         // COMPILE ERROR: variable multiply
 a /= b;         // COMPILE ERROR: variable divide
-a %= b;         // COMPILE ERROR: % not supported at codegen
+a %= b;         // COMPILE ERROR outside a const fn
 ```
 
 The compiler generates optimized memory operations where possible:

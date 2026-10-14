@@ -419,11 +419,22 @@ fn get_offset(px: u8, py: u8) -> u16 {
 }
 ```
 
+**What a const function can do:**
+- Arithmetic with `*`, `/` and `%` on any operands, not just powers of two. `/` and `%` truncate toward zero.
+- Control flow: `if`/`else`, `while`, `for` (including `..=`), `loop` with `break value`, `match`, and labeled `break`/`continue`.
+- Local variables, arrays, structs, type casts, newtypes and enums.
+- Calls to other const functions and to const methods (`Type::name(...)`), including recursion up to 256 calls deep.
+- Use of consts and const functions declared further down the file.
+
+Values wrap at their type's width exactly as they would at runtime. For example, a `u8` that reaches 256 is 0, and the result is converted to the declared return type. A const function therefore gives the same answer whether the compiler evaluates it or the 65816 runs it.
+
+When every argument is constant, the call must be evaluated at compile time. An error inside it is reported with its cause, for example division by zero, an index out of bounds, or more than 1,000,000 loop passes. The call is not silently left for runtime.
+
 **Const function restrictions:**
 - No hardware register access (`A`, `X`, `Y`, etc.)
 - No reading or writing runtime variables
 - No `asm!()` blocks
-- Supports arithmetic, control flow (`if`/`else`, `while`, `for`), local variables, type casts, and calls to other const functions
+- A body that uses `*`, `/` or `%` in a form the runtime rules reject can only be called with constant arguments; a call with a runtime argument is a compile error naming the operator
 
 ---
 

@@ -113,7 +113,7 @@ This is equivalent to writing the struct literal manually:
 | `div_u16` | `(far *self, value @ A: u16)` | `self /= value` (u16 operand; returns `0xFFFFFFFF` on divide by zero) |
 | `mod_u16` | `(far *self, value @ A: u16)` | `self %= value` (u16 operand, zero-extends; unchanged on divide by zero) |
 
-Whole-`U32` arithmetic is reached through the compound-assignment **operators**, not through named methods — `U32` implements `AddAssign`, `SubAssign`, `MulAssign`, and `DivAssign`. `mod` is the one named method, because there is no `%=` operator trait.
+Whole-`U32` arithmetic is reached through the compound-assignment **operators**, not through named methods — `U32` implements `AddAssign`, `SubAssign`, `MulAssign`, and `DivAssign`. `mod` is the one named method, because `U32` does not implement `RemAssign` (`%=`).
 
 ```rust
 SCORE += BONUS;      // impl AddAssign
