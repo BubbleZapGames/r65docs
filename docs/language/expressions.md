@@ -73,7 +73,7 @@ For general multiplication, use the `mul8()` / `mul16()` functions.
 
 ### Restricted Divide
 
-The `/` operator only accepts **power-of-2 constants from 1 to 256** as the right operand. The compiler translates these to logical right shifts (`LSR`).
+The `/` operator only accepts **power-of-2 constants from 1 to 256** as the right operand. The compiler translates these to right shifts.
 
 ```rust
 let x: u8 = a / 2;     // LSR           (2 cycles)
@@ -85,7 +85,7 @@ let e: u8 = a / 3;     // COMPILE ERROR: use div8(a, 3)
 let f: u8 = a / b;     // COMPILE ERROR: use div8(a, b)
 ```
 
-Both signed and unsigned division use logical right shift. Arithmetic right shift (sign-preserving) is not currently implemented for the `/` operator.
+Signed division (`i8`, `i16`) rounds toward zero, as in Rust: `-7 / 2` is `-3`. A negative dividend is adjusted before the shift, so signed division costs a few cycles more than unsigned, plus about twice as much per bit shifted.
 
 For general division, use the `div8()` / `div16()` functions.
 
@@ -113,7 +113,7 @@ let z: u8 = a << n;    // COMPILE ERROR: use shl8(a, n)
 let w: u8 = a >> n;    // COMPILE ERROR: use shr8(a, n)
 ```
 
-`>>` always performs a **logical shift** (fills with zeros), regardless of whether the operand is signed or unsigned. Shifting by an amount greater than or equal to the bit width is undefined behavior.
+On unsigned types `>>` is a **logical shift** (fills with zeros). On signed types (`i8`, `i16`) it is an **arithmetic shift**: it fills with copies of the sign bit, so it rounds toward negative infinity (`-7 >> 1` is `-4`, where `-7 / 2` is `-3`). The 65816 has no arithmetic shift instruction, so each bit of a signed shift costs about twice as much as an unsigned one. Shifting by an amount greater than or equal to the bit width is undefined behavior.
 
 For variable shift amounts, use the `shl8()` / `shl16()` and `shr8()` / `shr16()` functions.
 
