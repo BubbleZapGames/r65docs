@@ -455,7 +455,7 @@ let b: u16 = 1000;
 let c: u16 = a + b;   // a is implicitly promoted to u16
 ```
 
-This applies to arithmetic (`+`, `-`), bitwise (`&`, `|`, `^`), and comparison (`==`, `<`, etc.) operators.
+This applies to arithmetic (`+`, `-`), bitwise (`&`, `|`, `^`), and comparison (`==`, `<`, etc.) operators. An ordering comparison (`<`, `<=`, `>`, `>=`) between a signed and an unsigned operand is an error instead; cast one side with `as`.
 
 ### Pointer Type Checking
 

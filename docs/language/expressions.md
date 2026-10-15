@@ -148,6 +148,8 @@ flags = flags ^ 0x80;              // Toggle bit 7
 
 All six comparison operators produce `bool` results. Mixed-width integer operands are widened as for any binary operator (see [Implicit Integer Promotion](./types.md#implicit-integer-promotion)).
 
+`<`, `<=`, `>` and `>=` reject a signed operand compared with an unsigned one, such as an `i8` with a `u8` or a `u16`. No single comparison is right for both, and `-1 < 5` would come out false. Cast one side with `as` so both have the same signedness. An unsuffixed literal takes the other operand's type, so `x < 5` and `x < -1` need no cast.
+
 | Operator | Meaning | Unsigned Cycles | Signed Cycles |
 |---|---|---|---|
 | `==` | Equal | 4--6 | 4--6 |
