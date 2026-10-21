@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { useColorMode } from '@docusaurus/theme-common';
+import { r65EditorTheme } from './cmTheme';
 import styles from './OutputPanel.module.css';
 
 export function OutputPanel({ output, compiling }) {
@@ -45,7 +45,6 @@ export function OutputPanel({ output, compiling }) {
 function AsmViewer({ code }) {
   const containerRef = useRef(null);
   const viewRef = useRef(null);
-  const { colorMode } = useColorMode();
 
   useEffect(() => {
     let destroyed = false;
@@ -55,7 +54,7 @@ function AsmViewer({ code }) {
       const { EditorState } = await import('@codemirror/state');
       const { StreamLanguage, codeFolding, foldGutter, foldEffect, foldService } = await import('@codemirror/language');
       const { wladx65816 } = await import('./wladx-mode');
-      const { oneDark } = await import('@codemirror/theme-one-dark');
+      const theme = await r65EditorTheme();
 
       if (destroyed || !containerRef.current) return;
 
@@ -83,11 +82,8 @@ function AsmViewer({ code }) {
           '.cm-scroller': { overflow: 'auto' },
           '.cm-gutters': { border: 'none' },
         }),
+        theme,
       ];
-
-      if (colorMode === 'dark') {
-        extensions.push(oneDark);
-      }
 
       // Destroy previous instance
       if (viewRef.current) {
@@ -120,7 +116,7 @@ function AsmViewer({ code }) {
         viewRef.current = null;
       }
     };
-  }, [code, colorMode]);
+  }, [code]);
 
   return <div ref={containerRef} style={{ height: '100%', width: '100%' }} />;
 }

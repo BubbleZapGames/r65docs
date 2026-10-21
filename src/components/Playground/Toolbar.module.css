@@ -3,8 +3,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.5rem 1rem;
-  background: var(--ifm-background-surface-color, #16213e);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--ifm-background-surface-color);
+  border-bottom: 1px solid var(--r65-line);
   gap: 0.75rem;
   flex-shrink: 0;
 }
@@ -24,10 +24,10 @@
   background: var(--ifm-color-primary);
   color: #fff;
   border: none;
-  border-radius: 4px;
-  padding: 0.4rem 1rem;
+  border-radius: 999px;
+  padding: 0.45rem 1.2rem;
   font-size: 0.85rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   font-family: var(--ifm-font-family-base);
   transition: opacity 0.15s;
@@ -46,8 +46,8 @@
   background: rgba(255, 255, 255, 0.08);
   color: var(--ifm-font-color-base);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
-  padding: 0.4rem 0.6rem;
+  border-radius: 999px;
+  padding: 0.4rem 0.8rem;
   font-size: 0.85rem;
   font-family: var(--ifm-font-family-base);
   cursor: pointer;
@@ -76,7 +76,8 @@
 }
 
 .statusDot[data-status='ready'] {
-  background: #2ecc71;
+  background: var(--r65-sfc-y);
+  box-shadow: 0 0 6px var(--r65-sfc-y);
 }
 
 .statusDot[data-status='error'] {

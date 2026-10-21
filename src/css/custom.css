@@ -1,55 +1,364 @@
 /**
- * R65 documentation theme.
+ * R65 site theme: "Cartridge".
+ *
+ * Stark black and white with R65 red as the one accent, Archivo (with its
+ * width axis) for text and headings, Silkscreen for small pixel labels, and
+ * black code cards in both colour modes. The navbar and footer are black in
+ * both modes; pages are white in light mode and near-black in dark mode.
+ * Fonts are loaded from Google Fonts via `stylesheets` in docusaurus.config.js.
  */
 
 :root {
-  --ifm-color-primary: #c0392b;
-  --ifm-color-primary-dark: #ad3327;
-  --ifm-color-primary-darker: #a33025;
-  --ifm-color-primary-darkest: #86271e;
-  --ifm-color-primary-light: #c94d41;
-  --ifm-color-primary-lighter: #cd574b;
-  --ifm-color-primary-lightest: #d67a70;
-  --ifm-code-font-size: 95%;
+  --r65-red: #e8412c;
+  --r65-blue: #2f5bea;
+  --r65-ink: #0d0d0d;
+  --r65-line: #e2e2e2;
+  --r65-muted: #555;
+  --r65-panel: #f2f2f0;
+  --r65-code-bg: #0d0d0d;
+  --r65-sfc-a: #d8202a;
+  --r65-sfc-b: #f5c400;
+  --r65-sfc-x: #1f5fd1;
+  --r65-sfc-y: #1e9e4a;
+  --r65-pixel-font: 'Silkscreen', ui-monospace, monospace;
+
+  --ifm-color-primary: #d4361f;
+  --ifm-color-primary-dark: #bf311c;
+  --ifm-color-primary-darker: #b42e1a;
+  --ifm-color-primary-darkest: #942616;
+  --ifm-color-primary-light: #dc4630;
+  --ifm-color-primary-lighter: #df523d;
+  --ifm-color-primary-lightest: #e57767;
+
+  --ifm-background-color: #ffffff;
+  --ifm-background-surface-color: var(--r65-panel);
+  --ifm-font-color-base: var(--r65-ink);
+  --ifm-font-family-base: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ifm-heading-font-family: var(--ifm-font-family-base);
+  --ifm-heading-font-weight: 800;
   --ifm-font-family-monospace: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+  --ifm-code-font-size: 92%;
+  --ifm-global-radius: 10px;
+  --ifm-toc-border-color: var(--r65-line);
+  --ifm-hr-background-color: var(--r65-line);
+  --ifm-table-border-color: var(--r65-line);
+  --ifm-alert-border-left-width: 4px;
+  --docusaurus-highlighted-code-line-bg: rgba(255, 255, 255, 0.08);
 }
 
 [data-theme='dark'] {
-  --ifm-color-primary: #e74c3c;
-  --ifm-color-primary-dark: #e43725;
-  --ifm-color-primary-darker: #d92c1a;
-  --ifm-color-primary-darkest: #b32416;
-  --ifm-color-primary-light: #ea6153;
-  --ifm-color-primary-lighter: #ec6d60;
-  --ifm-color-primary-lightest: #f09488;
-  --ifm-background-color: #1a1a2e;
-  --ifm-background-surface-color: #16213e;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+  --r65-ink: #f2f2f0;
+  --r65-line: #262626;
+  --r65-muted: #a3a3a3;
+  --r65-panel: #121212;
+
+  --ifm-color-primary: #ff5a43;
+  --ifm-color-primary-dark: #ff4229;
+  --ifm-color-primary-darker: #ff361b;
+  --ifm-color-primary-darkest: #e62a10;
+  --ifm-color-primary-light: #ff725f;
+  --ifm-color-primary-lighter: #ff7e6d;
+  --ifm-color-primary-lightest: #ff9d90;
+
+  --ifm-background-color: #050505;
+  --ifm-background-surface-color: var(--r65-panel);
+  --ifm-font-color-base: var(--r65-ink);
+  --r65-code-bg: #121212;
+  --docusaurus-highlighted-code-line-bg: rgba(255, 255, 255, 0.1);
 }
 
-/* Hero section styling */
-.hero--primary {
-  --ifm-hero-background-color: #1a1a2e;
-  --ifm-hero-text-color: #eee;
+/* ---------- shared utilities ---------- */
+
+.pixel-label {
+  font-family: var(--r65-pixel-font);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
-[data-theme='light'] .hero--primary {
-  --ifm-hero-background-color: #2c3e50;
-  --ifm-hero-text-color: #fff;
+.pixelated {
+  image-rendering: pixelated;
 }
 
-/* Code blocks */
+/* ---------- type ---------- */
+
+h1, h2, h3 {
+  letter-spacing: -0.015em;
+}
+
+.markdown h1:first-child,
+h1 {
+  font-stretch: 110%;
+  font-weight: 800;
+}
+
+.markdown h2 {
+  font-stretch: 106%;
+  margin-top: 2.6rem;
+}
+
+.markdown h3 {
+  font-stretch: 104%;
+}
+
+/* ---------- buttons ---------- */
+
+.button {
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+/* ---------- navbar ---------- */
+
+.navbar--dark {
+  --ifm-navbar-background-color: #000;
+  --ifm-navbar-link-color: #e6e6e6;
+  --ifm-navbar-link-hover-color: #fff;
+  border-bottom: 1px solid #1f1f1f;
+  box-shadow: none;
+}
+
+.navbar__title {
+  font-weight: 900;
+  font-stretch: 120%;
+  letter-spacing: -0.01em;
+}
+
+.navbar__link {
+  font-weight: 600;
+}
+
+.navbar--dark .navbar__link--active {
+  color: #fff;
+  box-shadow: inset 0 -3px 0 var(--r65-red);
+}
+
+.navbar-sidebar {
+  background: #000;
+}
+
+/* ---------- footer ---------- */
+
+.footer--dark {
+  --ifm-footer-background-color: #000;
+  --ifm-footer-link-color: #c8c8c8;
+  --ifm-footer-link-hover-color: #fff;
+  --ifm-footer-title-color: #8a8a8a;
+  border-top: 1px solid #1f1f1f;
+}
+
+.footer__title {
+  font-family: var(--r65-pixel-font);
+  font-weight: 400;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.footer__copyright {
+  color: #8a8a8a;
+  font-size: 14px;
+}
+
+/* ---------- code ---------- */
+
 code {
-  border-radius: 4px;
+  border-radius: 6px;
+  border: 0;
+  background: var(--r65-panel);
 }
 
-/* Improve table readability */
+pre code {
+  background: transparent;
+}
+
+.theme-code-block {
+  --prism-background-color: var(--r65-code-bg) !important;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.theme-code-block [class*='codeBlockTitle'] {
+  font-family: var(--r65-pixel-font);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8a8a8a;
+  border-bottom-color: #262626;
+}
+
+[data-theme='light'] .theme-code-block {
+  border-left: 4px solid var(--r65-red);
+}
+
+/* ---------- tables ---------- */
+
+/* Full-width tables on wide screens; below that, Infima's default
+   display: block lets a wide table scroll inside itself instead of the page. */
+@media (min-width: 997px) {
+  table {
+    display: table;
+    width: 100%;
+  }
+}
+
 table {
-  display: table;
-  width: 100%;
+  border-collapse: collapse;
 }
 
 table th {
   text-align: left;
+  background: var(--r65-ink);
+  color: var(--ifm-background-color);
+  font-weight: 700;
+}
+
+[data-theme='dark'] table th {
+  background: #1a1a1a;
+  color: #fff;
+}
+
+table tr:nth-child(2n) {
+  background: transparent;
+}
+
+table tbody tr:nth-child(2n) {
+  background: var(--r65-panel);
+}
+
+/* ---------- docs ---------- */
+
+.theme-doc-sidebar-container {
+  border-right-color: var(--r65-line) !important;
+}
+
+.menu__link {
+  border-radius: 6px;
+}
+
+.menu__link--active:not(.menu__link--sublist) {
+  background: transparent;
+  box-shadow: inset 3px 0 0 var(--ifm-color-primary);
+  border-radius: 0 6px 6px 0;
+  font-weight: 700;
+}
+
+.theme-doc-sidebar-item-category-level-1 > .menu__list-item-collapsible > .menu__link {
+  font-family: var(--r65-pixel-font);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--r65-muted);
+}
+
+.table-of-contents__link--active {
+  color: var(--ifm-color-primary);
+  font-weight: 700;
+}
+
+.breadcrumbs__item--active .breadcrumbs__link {
+  background: var(--r65-panel);
+  color: var(--r65-ink);
+}
+
+.pagination-nav__link {
+  border-radius: 12px;
+  border-color: var(--r65-line);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.pagination-nav__link:hover {
+  border-color: var(--ifm-color-primary);
+  transform: translateY(-2px);
+}
+
+.pagination-nav__sublabel {
+  font-family: var(--r65-pixel-font);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--r65-muted);
+}
+
+.pagination-nav__label {
+  font-weight: 800;
+  font-stretch: 106%;
+}
+
+.alert {
+  border-radius: 10px;
+}
+
+/* ---------- blog ---------- */
+
+.blog-list-page article,
+.blog-tags-post-list-page article {
+  padding: 28px 30px;
+  border: 1px solid var(--r65-line);
+  border-radius: 14px;
+  transition: border-color 0.15s ease;
+}
+
+.blog-list-page article:hover,
+.blog-tags-post-list-page article:hover {
+  border-color: var(--ifm-color-primary);
+}
+
+.blog-wrapper article header h1,
+.blog-wrapper article header h2 {
+  font-stretch: 110%;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.blog-list-page article header h2 a,
+.blog-tags-post-list-page article header h2 a {
+  color: var(--ifm-font-color-base);
+}
+
+.blog-list-page article header h2 a:hover,
+.blog-tags-post-list-page article header h2 a:hover {
+  color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+
+.blog-wrapper article header time,
+.blog-wrapper article header [class*='container_'] > time {
+  font-family: var(--r65-pixel-font);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.blog-wrapper a[class*='tag_'] {
+  border-radius: 999px;
+  border-color: var(--r65-line);
+  font-weight: 600;
+}
+
+.blog-wrapper a[class*='tag_']:hover {
+  border-color: var(--ifm-color-primary);
+}
+
+.blog-wrapper [class*='sidebarItemTitle'] {
+  font-family: var(--r65-pixel-font);
+  font-size: 12px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--r65-muted);
+}
+
+.blog-wrapper [class*='sidebarItemLinkActive'] {
+  color: var(--ifm-color-primary) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pagination-nav__link,
+  .blog-list-page article {
+    transition: none;
+  }
+  .pagination-nav__link:hover {
+    transform: none;
+  }
 }

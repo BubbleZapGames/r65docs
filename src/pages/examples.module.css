@@ -9,25 +9,26 @@
   min-width: 280px;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: 1px solid var(--r65-line);
   background: var(--ifm-background-color);
   overflow-y: auto;
 }
 
 .sidebarHeader {
   padding: 0.75rem 1rem;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-family: var(--r65-pixel-font);
+  font-size: 11px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--ifm-font-color-secondary);
-  background: var(--ifm-background-surface-color, #16213e);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: var(--ifm-background-surface-color);
+  border-bottom: 1px solid var(--r65-line);
   flex-shrink: 0;
 }
 
 .category {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--r65-line);
 }
 
 .categoryHeader {
@@ -35,8 +36,8 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.6rem 1rem;
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-size: 0.85rem;
+  font-weight: 700;
   color: var(--ifm-font-color-base);
   cursor: pointer;
   user-select: none;
@@ -47,7 +48,7 @@
 }
 
 .categoryHeader:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--ifm-background-surface-color);
 }
 
 .chevron {
@@ -81,18 +82,18 @@
 }
 
 .exampleItem:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--ifm-background-surface-color);
   color: var(--ifm-font-color-base);
 }
 
 .exampleItemActive {
-  background: var(--ifm-color-primary-lightest, rgba(37, 194, 160, 0.1));
-  color: var(--ifm-color-primary);
-  font-weight: 500;
+  box-shadow: inset 3px 0 0 var(--ifm-color-primary);
+  color: var(--ifm-font-color-base);
+  font-weight: 700;
 }
 
 .exampleItemActive:hover {
-  background: var(--ifm-color-primary-lightest, rgba(37, 194, 160, 0.15));
+  background: var(--ifm-background-surface-color);
 }
 
 .mainPane {
@@ -109,8 +110,8 @@
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
-  background: var(--ifm-background-surface-color, #16213e);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: var(--ifm-background-surface-color);
+  border-bottom: 1px solid var(--r65-line);
   flex-shrink: 0;
 }
 
@@ -122,19 +123,20 @@
 }
 
 .editorTitle {
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 1rem;
+  font-weight: 800;
+  font-stretch: 106%;
   color: var(--ifm-font-color-base);
 }
 
 .previewButton {
-  padding: 0.2rem 0.65rem;
-  font-size: 0.75rem;
-  font-weight: 500;
+  padding: 0.3rem 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 700;
   color: #fff;
   background: var(--ifm-color-primary);
   border: none;
-  border-radius: 4px;
+  border-radius: 999px;
   cursor: pointer;
   line-height: 1.4;
 }
@@ -175,7 +177,7 @@
 .previewOverlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.75);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -186,8 +188,9 @@
   width: 90%;
   height: 85%;
   max-width: 960px;
-  background: var(--ifm-background-color);
-  border-radius: 8px;
+  background: #000;
+  border: 1px solid #262626;
+  border-radius: 14px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -198,19 +201,22 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--ifm-font-color-base);
-  background: var(--ifm-background-surface-color, #16213e);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 0.6rem 0.9rem;
+  font-family: var(--r65-pixel-font);
+  font-size: 11px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #fff;
+  background: #0d0d0d;
+  border-bottom: 1px solid var(--r65-line);
   flex-shrink: 0;
 }
 
 .previewClose {
   background: none;
   border: none;
-  color: var(--ifm-font-color-secondary);
+  color: #a3a3a3;
   font-size: 1rem;
   cursor: pointer;
   padding: 0.1rem 0.3rem;
@@ -220,7 +226,7 @@
 
 .previewClose:hover {
   background: rgba(255, 255, 255, 0.1);
-  color: var(--ifm-font-color-base);
+  color: #fff;
 }
 
 .previewBody {
@@ -240,7 +246,7 @@
     min-width: 100%;
     max-height: 40vh;
     border-right: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid var(--r65-line);
   }
 
   .mainPane {

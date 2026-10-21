@@ -1,11 +1,9 @@
 import React, { useEffect, useRef } from 'react';
-import { useColorMode } from '@docusaurus/theme-common';
+import { r65EditorTheme } from './cmTheme';
 
 export function Editor({ value, onChange, onCompile }) {
   const containerRef = useRef(null);
   const viewRef = useRef(null);
-  const { colorMode } = useColorMode();
-
   // Track latest callbacks in refs so the keymap doesn't go stale
   const onCompileRef = useRef(onCompile);
   onCompileRef.current = onCompile;
@@ -24,11 +22,9 @@ export function Editor({ value, onChange, onCompile }) {
       const { EditorState, Prec } = await import('@codemirror/state');
       const { basicSetup } = await import('codemirror');
       const { rust } = await import('@codemirror/lang-rust');
-      const { oneDark } = await import('@codemirror/theme-one-dark');
+      const theme = await r65EditorTheme();
 
       if (destroyed || !containerRef.current) return;
-
-      const isDark = colorMode === 'dark';
 
       const extensions = [
         basicSetup,
@@ -51,11 +47,8 @@ export function Editor({ value, onChange, onCompile }) {
           '&': { height: '100%' },
           '.cm-scroller': { overflow: 'auto' },
         }),
+        theme,
       ];
-
-      if (isDark) {
-        extensions.push(oneDark);
-      }
 
       const state = EditorState.create({
         doc: valueRef.current,
@@ -80,8 +73,7 @@ export function Editor({ value, onChange, onCompile }) {
         viewRef.current = null;
       }
     };
-    // Re-create editor when theme changes
-  }, [colorMode]);
+  }, []);
 
   // Update editor content when value changes externally (e.g. example selection)
   useEffect(() => {

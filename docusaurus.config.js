@@ -20,6 +20,15 @@ const config = {
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'warn',
 
+  headTags: [
+    {tagName: 'link', attributes: {rel: 'preconnect', href: 'https://fonts.googleapis.com'}},
+    {tagName: 'link', attributes: {rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: 'anonymous'}},
+  ],
+
+  stylesheets: [
+    'https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Silkscreen&family=JetBrains+Mono:wght@400;600&display=swap',
+  ],
+
   i18n: {
     defaultLocale: 'en',
     locales: ['en'],
@@ -63,6 +72,7 @@ const config = {
         respectPrefersColorScheme: true,
       },
       navbar: {
+        style: 'dark',
         title: 'R65',
         logo: {
           alt: 'R65 Logo',
@@ -151,8 +161,8 @@ const config = {
         copyright: `Copyright \u00a9 ${new Date().getFullYear()} Bubble Zap Games.`,
       },
       prism: {
-        theme: prismThemes.github,
-        darkTheme: prismThemes.dracula,
+        theme: prismThemes.vsDark,
+        darkTheme: prismThemes.vsDark,
         additionalLanguages: ['rust', 'nasm'],
       },
     }),

@@ -1,8 +1,7 @@
 .panel {
   height: 100%;
   overflow: auto;
-  background: var(--ifm-background-surface-color, #16213e);
-  border-radius: 4px;
+  background: var(--r65-code-bg);
 }
 
 .output {
@@ -13,7 +12,7 @@
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
-  color: var(--ifm-font-color-base);
+  color: #e6e6e6;
   background: transparent;
   border: none;
 }

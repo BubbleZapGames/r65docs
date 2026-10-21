@@ -17,7 +17,7 @@ function PreviewOverlay({ smcUrl, exampleName, onClose }) {
     window.EJS_player = '#ejs-game';
     window.EJS_core = 'snes';
     window.EJS_gameName = exampleName;
-    window.EJS_color = '#0064ff';
+    window.EJS_color = '#e8412c';
     window.EJS_startOnLoaded = true;
     window.EJS_pathtodata = 'https://cdn.emulatorjs.org/stable/data/';
     window.EJS_gameUrl = smcUrl;

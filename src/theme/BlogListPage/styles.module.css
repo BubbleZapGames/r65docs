@@ -1,0 +1,67 @@
+.hero {
+  padding: 72px 0 64px;
+  color: #fff;
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.035) 0 2px, transparent 2px 4px),
+    radial-gradient(60% 120% at 85% 120%, rgba(232, 65, 44, 0.4), transparent 70%),
+    #000;
+}
+
+.label {
+  display: inline-block;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.title {
+  margin: 18px 0 0;
+  font-size: clamp(44px, 6vw, 84px);
+  font-weight: 800;
+  font-stretch: 112%;
+  line-height: 0.98;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.sub {
+  margin: 16px 0 0;
+  max-width: 560px;
+  font-size: 19px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 26px;
+}
+
+.pill {
+  padding: 8px 16px;
+  border: 1.5px solid #fff;
+  border-radius: 999px;
+  color: #fff !important;
+  font-weight: 700;
+  font-size: 14px;
+  text-decoration: none !important;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.pill:hover {
+  background: #fff;
+  color: #000 !important;
+}
+
+@media (max-width: 600px) {
+  .hero {
+    padding: 48px 0 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pill {
+    transition: none;
+  }
+}
