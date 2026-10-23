@@ -75,7 +75,8 @@ export function Editor({ value, onChange, onCompile }) {
     };
   }, []);
 
-  // Update editor content when value changes externally (e.g. example selection)
+  // Update editor content when value changes externally (e.g. example selection),
+  // starting the new document at the top with the cursor on its first line
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
@@ -83,7 +84,9 @@ export function Editor({ value, onChange, onCompile }) {
     if (value !== currentDoc) {
       view.dispatch({
         changes: { from: 0, to: currentDoc.length, insert: value },
+        selection: { anchor: 0 },
       });
+      view.scrollDOM.scrollTop = 0;
     }
   }, [value]);
 
