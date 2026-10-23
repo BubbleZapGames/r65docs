@@ -61,7 +61,7 @@ function PlaygroundInner() {
 
 export default function PlaygroundPage() {
   return (
-    <Layout noFooter title="Playground" description="R65 online compiler playground">
+    <Layout title="Playground" description="R65 online compiler playground">
       <BrowserOnly fallback={<div className={styles.loading}>Loading playground...</div>}>
         {() => (
           <PyodideProvider>
