@@ -65,8 +65,3 @@
     flex: 2;
   }
 }
-
-/* Hide Docusaurus footer on playground page */
-:global(.playground-page .footer) {
-  display: none;
-}

@@ -240,7 +240,7 @@ function ExamplesInner() {
 
 export default function ExamplesPage() {
   return (
-    <Layout title="Examples" description="R65 code examples">
+    <Layout noFooter title="Examples" description="R65 code examples">
       <BrowserOnly
         fallback={<div className={styles.loading}>Loading examples...</div>}
       >

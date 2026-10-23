@@ -254,8 +254,3 @@
     min-height: 0;
   }
 }
-
-/* Hide Docusaurus footer on examples page */
-:global(.examples-page .footer) {
-  display: none;
-}
