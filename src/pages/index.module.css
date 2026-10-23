@@ -257,7 +257,7 @@
   text-align: center;
   background:
     repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.04) 0 2px, transparent 2px 4px),
-    radial-gradient(70% 90% at 50% 100%, rgba(232, 65, 44, 0.35), transparent 70%),
+    radial-gradient(70% 90% at 50% 100%, rgba(47, 91, 234, 0.35), transparent 70%),
     var(--black);
 }
 .startTitle {

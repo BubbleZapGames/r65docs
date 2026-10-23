@@ -26,7 +26,7 @@ function Hero() {
       <div className={styles.wrap}>
         <div className={styles.heroInner}>
           <span className={styles.pixLabel}>SNES · 65816 · WLA-DX</span>
-          <h1 className={styles.heroTitle}>Build for the Super&nbsp;Nintendo in a modern language.</h1>
+          <h1 className={styles.heroTitle}>Build for the SNES in a modern language.</h1>
           <p className={styles.heroSub}>
             R65 brings structs, enums, traits and a type checker to the 65816,
             and compiles them to assembly you'd be happy to have written yourself.
