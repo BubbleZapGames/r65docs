@@ -42,10 +42,14 @@
   cursor: not-allowed;
 }
 
+/* Dark in both colour modes, like the editors below it. color-scheme and the
+   option colours make the open list dark too; without them the browser draws
+   it white under the light text. */
 .exampleSelect {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--ifm-font-color-base);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: #1a1a1a;
+  color: #e6e6e6;
+  color-scheme: dark;
+  border: 1px solid #333;
   border-radius: 999px;
   padding: 0.4rem 0.8rem;
   font-size: 0.85rem;
@@ -53,9 +57,14 @@
   cursor: pointer;
 }
 
-[data-theme='light'] .exampleSelect {
-  background: rgba(0, 0, 0, 0.05);
-  border-color: rgba(0, 0, 0, 0.15);
+.exampleSelect:hover,
+.exampleSelect:focus-visible {
+  border-color: var(--r65-red);
+}
+
+.exampleSelect option {
+  background: #1a1a1a;
+  color: #e6e6e6;
 }
 
 .status {
