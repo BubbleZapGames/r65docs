@@ -12,7 +12,7 @@ const CONTINUES = [
   {label: 'Home', to: '/'},
   {label: 'Docs', to: '/docs/getting-started/overview'},
   {label: 'Examples', to: '/examples'},
-  {label: 'Blog', to: '/blog'},
+  {label: 'News', to: '/news'},
 ];
 
 export default function NotFoundContent({className}) {

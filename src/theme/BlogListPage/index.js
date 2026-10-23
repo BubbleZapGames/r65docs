@@ -43,9 +43,9 @@ function BlogHero({metadata}) {
         <h1 className={styles.title}>{metadata.blogTitle}</h1>
         <p className={styles.sub}>{metadata.blogDescription}</p>
         <div className={styles.links}>
-          <a className={styles.pill} href="/blog/rss.xml">RSS</a>
-          <a className={styles.pill} href="/blog/atom.xml">Atom</a>
-          <Link className={styles.pill} to="/blog/archive">Archive</Link>
+          <a className={styles.pill} href="/news/rss.xml">RSS</a>
+          <a className={styles.pill} href="/news/atom.xml">Atom</a>
+          <Link className={styles.pill} to="/news/archive">Archive</Link>
         </div>
       </div>
     </header>

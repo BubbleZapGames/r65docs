@@ -44,8 +44,9 @@ const config = {
           editUrl: 'https://github.com/BubbleZapGames/r65docs/tree/main/',
         },
         blog: {
+          routeBasePath: 'news',
           showReadingTime: true,
-          blogTitle: 'R65 Blog',
+          blogTitle: 'R65 News',
           blogDescription: 'News, deep dives and SNES development notes from the R65 project.',
           blogSidebarTitle: 'Recent posts',
           blogSidebarCount: 'ALL',
@@ -96,8 +97,8 @@ const config = {
             position: 'left',
           },
           {
-            to: '/blog',
-            label: 'Blog',
+            to: '/news',
+            label: 'News',
             position: 'left',
           },
           {
@@ -148,8 +149,8 @@ const config = {
             title: 'More',
             items: [
               {
-                label: 'Blog',
-                to: '/blog',
+                label: 'News',
+                to: '/news',
               },
               {
                 label: 'GitHub',
