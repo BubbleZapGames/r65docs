@@ -108,7 +108,7 @@ target = expression;
 
 **Semantics:**
 
-- The target must be a mutable variable, hardware register, array element, struct field, or dereferenced pointer.
+- The target must be a mutable variable, hardware register, array element, struct field, or dereferenced pointer. It may be parenthesized: `(x) = 10` is the same as `x = 10`.
 - The expression type must be compatible with the target type.
 
 **Examples:**

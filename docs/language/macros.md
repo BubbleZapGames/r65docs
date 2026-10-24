@@ -75,7 +75,7 @@ Fragment specifiers determine what kind of syntax a parameter can match. R65 sup
 
 ### `expr` -- Expressions
 
-Matches any valid R65 expression. Expressions are automatically parenthesized during expansion to preserve operator precedence.
+Matches any valid R65 expression. Expressions of more than one token are automatically parenthesized during expansion to preserve operator precedence.
 
 ```rust
 macro_rules! double($val:expr) {
@@ -301,6 +301,8 @@ double!(1 + 2)
 // Without parenthesization: 1 + 2 * 2 = 5 (wrong)
 // With parenthesization:    (1 + 2) * 2 = 6 (correct)
 ```
+
+A single-token argument (`x`, `5`, `"text"`) needs no grouping and is substituted as is. A parenthesized argument still works as an assignment target, since `(buf[i]) = 0` is a valid assignment.
 
 ## Built-in Macros
 
