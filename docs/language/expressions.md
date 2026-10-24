@@ -113,7 +113,9 @@ let z: u8 = a << n;    // COMPILE ERROR: use shl8(a, n)
 let w: u8 = a >> n;    // COMPILE ERROR: use shr8(a, n)
 ```
 
-On unsigned types `>>` is a **logical shift** (fills with zeros). On signed types (`i8`, `i16`) it is an **arithmetic shift**: it fills with copies of the sign bit, so it rounds toward negative infinity (`-7 >> 1` is `-4`, where `-7 / 2` is `-3`). The 65816 has no arithmetic shift instruction, so each bit of a signed shift costs about twice as much as an unsigned one. Shifting by an amount greater than or equal to the bit width is undefined behavior.
+On unsigned types `>>` is a **logical shift** (fills with zeros). On signed types (`i8`, `i16`) it is an **arithmetic shift**: it fills with copies of the sign bit, so it rounds toward negative infinity (`-7 >> 1` is `-4`, where `-7 / 2` is `-3`). The 65816 has no arithmetic shift instruction, so each bit of a signed shift costs about twice as much as an unsigned one. Shifting a run-time value by an amount greater than or equal to its bit width is a compile error, since no bit of it would survive: widen it first, as in `(b as u16) << 10`.
+
+A shift whose value lands in a wider destination is computed at the destination's width, whether it is assigned directly or packed in with `|`, `&`, `^`, `+` or `-`. With `hi` and `lo` both `u8`, `let w: u16 = (hi << 8) | lo;` shifts `hi` as a `u16` rather than losing it to an 8-bit shift.
 
 For variable shift amounts, use the `shl8()` / `shl16()` and `shr8()` / `shr16()` functions.
 
