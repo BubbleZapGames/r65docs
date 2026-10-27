@@ -4,7 +4,15 @@
 
 ### Is R65 a Rust compiler for the SNES?
 
-No. R65 uses Rust-*inspired* syntax but is a purpose-built language for the 65816 processor. It is not a Rust subset, fork, or port. You cannot compile Rust crates with it. The resemblance is intentional. If you know Rust syntax, you can read R65 code but the language semantics are designed around 8-bit/16-bit hardware, not Rust's ownership model.
+R65 is a language of its own, built for the 65816, that writes like Rust. Rather than porting Rust to the SNES, it brings Rust's way of writing code to the hardware: if Rust is how you like to think about code, R65 will feel familiar from the first line.
+
+**Its role is the layer above 65816 assembly.** The compiler turns R65 source into ordinary assembly, so R65 and hand-written assembly live side by side in one project. You write game logic, data layouts and hardware setup in R65 and let the compiler keep track of processor modes, memory banks and types. When a routine needs every cycle, you write it in assembly and call it from R65, with the call still type-checked. R65 is built for new SNES games and homebrew, and for reverse engineering, where variables and code can be placed at the exact addresses an existing ROM uses.
+
+How R65 relates to Rust, in brief:
+
+- **Copied from Rust:** the syntax and the everyday constructs: `let` and `mut`, `struct`, `enum` and `match`, `impl` blocks, `const fn`, doc comments and `as` casts. If you can read Rust, you can read R65.
+- **A subset of Rust:** features kept in a smaller form. Traits work without generics, `macro_rules!` has six fragment types and no hygiene, integers go up to 16 bits, and files are included rather than organized into modules.
+- **Diverges from Rust:** the rules underneath. Where Rust models memory ownership, R65 models the machine itself: its registers, memory and costs are part of the language.
 
 ### What does R65 give me over writing raw 65816 assembly?
 
