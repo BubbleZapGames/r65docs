@@ -278,8 +278,8 @@ Function pointers store the address of a callable function.
 
 | Type           | Size    | Calling Convention |
 |----------------|---------|-------------------|
-| `fn()`         | 2 bytes | Near (JSR/RTS)    |
-| `far fn()`     | 3 bytes | Far (JSL/RTL)     |
+| `fn()`         | 3 bytes | Far (JSL/RTL), the default |
+| `near fn()`    | 2 bytes | Near (JSR/RTS)    |
 
 ```rust
 fn add(a @ A: u8, b @ X: u16) -> u8 { return A; }
@@ -287,7 +287,7 @@ fn add(a @ A: u8, b @ X: u16) -> u8 { return A; }
 let callback: fn(u8, u16) -> u8 = add;
 ```
 
-The calling convention (near vs. far) is encoded in the type. A `fn()` and `far fn()` are distinct, incompatible types.
+The calling convention (near vs. far) is encoded in the type. A `fn()` and `near fn()` are distinct, incompatible types: a `near fn()` pointer holds only a `near fn`.
 
 ### Multiple Return Values
 
@@ -371,8 +371,8 @@ let w: Word = 0x1234;     // Same as: let w: u16 = 0x1234;
 | `u16`, `i16`      | 2 bytes |
 | `*T`              | 2 bytes |
 | `far *T`          | 3 bytes |
-| `fn()`            | 2 bytes |
-| `far fn()`        | 3 bytes |
+| `fn()`            | 3 bytes |
+| `near fn()`       | 2 bytes |
 | `[T; N]`          | `N * sizeof(T)` |
 | struct            | Sum of field sizes |
 | union             | Largest field |

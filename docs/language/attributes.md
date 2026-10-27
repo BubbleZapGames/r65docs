@@ -263,11 +263,11 @@ fn main_loop() { }          // Bank 0
 fn helper() { }             // Also bank 0 (inherits)
 
 #[bank(1)]
-far fn audio_tick() { }     // Bank 1
-far fn audio_init() { }     // Also bank 1 (inherits)
+fn audio_tick() { }         // Bank 1
+fn audio_init() { }         // Also bank 1 (inherits)
 
 #[bank(auto)]
-far fn flexible() { }       // Compiler chooses bank
+fn flexible() { }           // Compiler chooses bank
 ```
 
 **Parameter values:**
@@ -278,9 +278,9 @@ far fn flexible() { }       // Compiler chooses bank
 | `#[bank(auto)]` | Compiler assigns bank automatically |
 
 **Rules:**
-- Near functions (`fn`) must be in the same bank as their callers. The compiler rejects cross-bank near calls.
-- Far functions (`far fn`) are callable from any bank. Methods in `impl`/`trait` blocks are far by default; `near fn` opts out (see [Functions](functions.md#methods)).
-- In `#[bank(auto)]` mode, all free functions must be `far fn`, methods must not be `near fn`, and all immutable (ROM) statics must be `far static`.
+- Functions are far by default and callable from any bank (see [Functions](functions.md#near-vs-far-calls)).
+- A `near fn` must be in the same bank as its callers. The compiler rejects cross-bank near calls.
+- In `#[bank(auto)]` mode, a function must not be `near fn`, and all immutable (ROM) statics must be `far static`.
 
 ---
 
@@ -288,12 +288,12 @@ far fn flexible() { }       // Compiler chooses bank
 
 Controls how the Data Bank Register (DBR) is managed around far function calls. DBR determines which bank is used for absolute-address data accesses.
 
-This attribute applies only to `far fn` functions. It has no effect on near functions.
+This attribute applies only to far functions (the default). A `near fn` with a `databank` mode is an error.
 
 ```rust
 #[bank(1)]
 #[mode(databank=inline)]
-far fn graphics_engine() {
+fn graphics_engine() {
     // DBR is saved, set to bank 1, then restored on return
 }
 ```
@@ -553,9 +553,9 @@ struct P { x: u8 }
 | `#[interrupt(vector, preserve=false)]` | `fn` | Interrupt handler, manual save |
 | `#[bank(n)]` | `fn`, `static` | ROM bank placement |
 | `#[bank(auto)]` | `fn`, `static` | Automatic bank placement |
-| `#[mode(databank=none)]` | `far fn` | No DBR management (default) |
-| `#[mode(databank=inline)]` | `far fn` | Callee saves/sets/restores DBR |
-| `#[mode(databank=caller)]` | `far fn` | Caller manages DBR |
+| `#[mode(databank=none)]` | `fn` | No DBR management (default) |
+| `#[mode(databank=inline)]` | `fn` | Callee saves/sets/restores DBR |
+| `#[mode(databank=caller)]` | `fn` | Caller manages DBR |
 | `#[snesrom(...)]` | *(standalone)* | SNES ROM header configuration |
 | `#[cfg(target)]` | Any item | Conditional compilation |
 | `#[inline]` / `#[inline(always)]` / `#[inline(never)]` | `fn`, method | Inlining hint or directive |

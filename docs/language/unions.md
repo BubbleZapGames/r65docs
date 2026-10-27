@@ -95,7 +95,7 @@ Pointers to unions work like pointers to structs, near and far:
 
 ```rust
 fn hi_of(p: *Pixel) -> u8 { return p.bytes[1]; }
-far fn far_hi(p: far *Pixel) -> u8 { return p.bytes[1]; }
+fn far_hi(p: far *Pixel) -> u8 { return p.bytes[1]; }
 ```
 
 Arrays of unions stride by the union's size:

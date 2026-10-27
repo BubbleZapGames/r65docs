@@ -105,8 +105,8 @@ an R65 ABI signature so the type checker and code generator can call them:
 ```rust
 include_asm!("vendor/sound.s");   // Assembles the .s into the current bank
 
-extern fn sound_tick(a @ A: u8) -> u8;   // near, JSR into current bank
-extern far fn sound_play(id @ A: u8);    // far, JSL (24-bit) into any bank
+extern near fn sound_tick(a @ A: u8) -> u8;  // near, JSR into current bank
+extern fn sound_play(id @ A: u8);            // far, JSL (24-bit) into any bank
 extern static SONG_TABLE: [u8; 64];      // label owned by the .s file
 extern static mut SOUND_RAM: [u8; 256];
 ```

@@ -128,14 +128,20 @@ syntax is identical to a normal function, so you pick the calling convention
 (register-bound, variable-bound, or stack) right in the signature:
 
 ```rust
-extern fn sound_tick(a @ A: u8) -> u8;        // near: JSR into the current bank
-extern far fn sound_play(id @ A: u8);         // far: JSL (24-bit), callable cross-bank
+extern fn sound_play(id @ A: u8);             // far: JSL (24-bit), callable cross-bank
+extern near fn sound_tick(a @ A: u8) -> u8;   // near: JSR into the current bank
 ```
 
-- `extern fn` lowers to `JSR symbol` (near, same bank as the caller).
-- `extern far fn` lowers to `JSL symbol` (24-bit, callable from any bank).
-- Calling a **near** `extern fn` from a different bank is a compile-time error,
-  exactly like a near R65 `fn`. Declare it `extern far fn` to call across banks.
+- `extern fn` is far, like every R65 function: it lowers to `JSL symbol`
+  (24-bit, callable from any bank), so the routine must return with `RTL`.
+- `extern near fn` lowers to `JSR symbol` (same bank as the caller), for a
+  routine that returns with `RTS`.
+- Calling an `extern near fn` from a different bank is a compile-time error,
+  exactly like a `near fn` in R65.
+
+The declaration must match how the routine returns: the compiler cannot see
+inside the `.s` file, and a `JSL` to a routine ending in `RTS` (or a `JSR` to
+one ending in `RTL`) returns to the wrong address.
 
 By default the compiler assumes the assembly callee **clobbers every register**.
 Add `#[preserves(...)]` to assert what the routine actually leaves untouched —
@@ -143,7 +149,7 @@ the compiler trusts the annotation and skips the save/restore:
 
 ```rust
 #[preserves(X, Y)]
-extern fn sound_tick(a @ A: u8) -> u8;
+extern near fn sound_tick(a @ A: u8) -> u8;
 ```
 
 ### `extern static`
@@ -166,8 +172,8 @@ error, and initializers are not allowed (the assembly file provides the data).
 ```rust
 include_asm!("game_helpers.s");
 
-extern fn add_asm(a @ A: u8, b @ X: u16) -> u8;
-extern far fn audio_tick();
+extern near fn add_asm(a @ A: u8, b @ X: u16) -> u8;
+extern fn audio_tick();
 extern static PALETTE: [u8; 32];
 
 fn main() {

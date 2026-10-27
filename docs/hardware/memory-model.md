@@ -194,8 +194,8 @@ process(&TABLE);  // *[u8; 256] coerces to *u8
 ### Function Pointers
 
 ```rust
-fn(u8) -> u8          // Near function pointer (2 bytes, JSR/RTS)
-far fn(u8) -> u8      // Far function pointer (3 bytes, JSL/RTL)
+fn(u8) -> u8          // Function pointer (far: 3 bytes, JSL/RTL)
+near fn(u8) -> u8     // Near function pointer (2 bytes, JSR/RTS)
 ```
 
 ### Null Pointers
@@ -382,6 +382,6 @@ u8, i8, bool:           1 byte
 u16, i16:               2 bytes
 Near pointer (*T):      2 bytes
 Far pointer (far *T):   3 bytes
-Near fn ptr (fn()):     2 bytes
-Far fn ptr (far fn()):  3 bytes
+Far fn ptr (fn()):       3 bytes
+Near fn ptr (near fn()): 2 bytes
 ```

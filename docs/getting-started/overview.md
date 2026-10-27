@@ -269,8 +269,8 @@ static mut PTR: *Player;
 PTR.x = 10;                         // Auto-dereference for struct fields
 
 let p: *Player = &PLAYER;           // Address-of operator
-type Handler = fn(u8) -> u8;        // Near function pointer (JSR/RTS)
-type FarHandler = far fn(u8) -> u8; // Far function pointer (JSL/RTL)
+type Handler = fn(u8) -> u8;          // Function pointer (far, JSL/RTL)
+type NearHandler = near fn(u8) -> u8; // Near function pointer (JSR/RTS)
 ```
 
 Pointer arithmetic scales by `sizeof(T)`. Zero-page pointers are fastest due to the 65816's indirect addressing modes.
@@ -279,21 +279,21 @@ For complete pointer documentation, see [Pointers and Memory](../hardware/memory
 
 ## Cross-Bank Functions
 
-Functions in other ROM banks use `far fn` and are called via JSL/RTL:
+Every function is far by default: it is called via JSL/RTL and callable from any ROM bank.
 
 ```rust
 #[bank(1)]
-far fn sound_engine() {
+fn sound_engine() {
     // Placed in ROM bank 1, callable from any bank
 }
 
 #[mode(databank=inline)]
-far fn graphics_update() {
+fn graphics_update() {
     // Compiler generates PHB/PLB to manage Data Bank Register
 }
 ```
 
-Near functions (`fn`) use JSR/RTS and can only call within the same bank. Far functions (`far fn`) use JSL/RTL and are callable from anywhere. Methods in `impl` and `trait` blocks are far by default; write `near fn` to opt one out. See [Functions](../language/functions.md#methods).
+`near fn` opts a function into JSR/RTS, callable only from its own bank. You rarely need it: the optimizer already turns a far call into a near one when caller and callee share a bank. See [Functions](../language/functions.md#near-vs-far-calls).
 
 ## Interrupt Handlers
 

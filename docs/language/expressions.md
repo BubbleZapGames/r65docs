@@ -357,7 +357,7 @@ let z = (flags & 0x80) != 0;  // Same as flags & 0x80 != 0; the parentheses are 
 
 ## Software Functions for Expensive Operations
 
-When an operation cannot be expressed with the restricted operators, call the corresponding function from the standard library's `math.r65` (`include!("lib/math.r65")`). They are ordinary `far fn`s; the [Math Library](../platform/math.md#scalar-math-functions) page has the full signatures.
+When an operation cannot be expressed with the restricted operators, call the corresponding function from the standard library's `math.r65` (`include!("lib/math.r65")`). They are ordinary (far) functions; the [Math Library](../platform/math.md#scalar-math-functions) page has the full signatures.
 
 ### Summary
 

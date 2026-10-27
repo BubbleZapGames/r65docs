@@ -42,7 +42,7 @@ The payload must be a scalar that fits in a register.
 | `u8` `i8` `bool` | Structs and unions |
 | `u16` `i16` | Arrays |
 | Any enum | `far *T` (3 bytes) |
-| Any near pointer (`*T`), including a near `fn` pointer | Another newtype |
+| Any near pointer (`*T`), including a near function pointer (`near fn(...)`) | Another newtype |
 
 ```rust
 struct Facing(Direction);    // enum payload — OK

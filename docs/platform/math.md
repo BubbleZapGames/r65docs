@@ -24,7 +24,7 @@ include!("lib/Q8.r65")       // Unsigned 8.8 fixed point
 
 ## Scalar Math Functions
 
-`math.r65` provides multiplication, division, modulo, and variable shift operations. All are `far fn`.
+`math.r65` provides multiplication, division, modulo, and variable shift operations. Like every function they are far, so they are callable from any bank.
 
 On SNES targets (`#[cfg(snes)]`) multiplication and division use the hardware math units. Only `mul8`, `mul16`, and `div8` have software fallbacks; `div16`, `mod16`, and `mod8` are **SNES-only**, and the non-SNES build offers `mod_shift` in their place.
 

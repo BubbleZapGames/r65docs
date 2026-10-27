@@ -16,7 +16,7 @@ fn name(parameters) -> ReturnType {
 }
 ```
 
-Free functions are near (same-bank) by default; use `far fn` for cross-bank calls. Methods in `impl` and `trait` blocks are the other way round — far by default, with `near fn` to opt out (see [Methods](#methods)). A function without a return type annotation returns nothing.
+Every function is far by default: callable from any bank. `near fn` opts out (see [Near vs Far Calls](#near-vs-far-calls)). A function without a return type annotation returns nothing.
 
 ```rust
 fn add_one(value @ A: u8) -> u8 {
@@ -249,48 +249,49 @@ If control can reach the end of a `-> !` function, or a `return` in it, the comp
 
 ## Near vs Far Calls
 
-### Near Functions
+### Far Functions (the default)
 
 **Syntax:** `fn name() { }`
 
-Near functions can only be called from within the same bank.
+Every function is far unless it says otherwise: free functions, methods, trait methods and [`extern fn`](../platform/assembly-code.md) alike. A far function is called with JSL/RTL and a 24-bit address, so it is callable from any bank. `far fn` is accepted and means the same as the default.
 
 ```rust
-fn helper() -> u8 {
+#[bank(1)]
+fn sound_engine() {
+    // Lives in bank 1, callable from anywhere
+}
+```
+
+A function in a multi-bank ROM gets called from wherever it is useful, so the default that needs no thought is the one that works everywhere.
+
+### Near Functions
+
+**Syntax:** `near fn name() { }`
+
+A near function is called with JSR/RTS and a 16-bit address, so it can only be called from within its own bank.
+
+```rust
+near fn helper() -> u8 {
     return A;
 }
 ```
 
-### Far Functions
-
-**Syntax:** `far fn name() { }`
-
-Far functions are callable from any bank.
-
-```rust
-#[bank(1)]
-far fn sound_engine() {
-    // Lives in bank 1, callable from anywhere
-}
-```
+The `#[entry]` function and `#[interrupt]` handlers are reached through the CPU's vectors rather than called, so the far default does not apply to them.
 
 ### Cross-Bank Call Rules
 
 | Caller Bank | Callee Bank | Callee Type | Allowed |
 |-------------|-------------|-------------|---------|
-| 0 | 0 | `fn` | Yes |
-| 0 | 1 | `fn` | No -- compile error |
-| 0 | 1 | `far fn` | Yes |
-| 1 | 0 | `fn` | No -- compile error |
-| Any | Any | `far fn` | Yes |
-| Any | Any | method `fn` (far by default) | Yes |
-| 0 | 1 | method `near fn` | No -- compile error |
+| Any | Any | `fn` (far by default) | Yes |
+| 0 | 0 | `near fn` | Yes |
+| 0 | 1 | `near fn` | No -- compile error |
+| 1 | 0 | `near fn` | No -- compile error |
 
 Near functions use a 16-bit address and cannot cross bank boundaries. The compiler enforces this at compile time.
 
 ### Methods
 
-A method — a `fn` inside an `impl` or `trait` block — is **far by default**. A type's methods get called from wherever the type is used, which in a multi-bank ROM means from any bank, so the default that needs no thought is the one that works everywhere. `near fn` opts a method back into JSR/RTS; `far fn` is accepted and means the same as the default.
+Methods follow the same rule: a `fn` inside an `impl` or `trait` block is far, and `near fn` opts it into JSR/RTS.
 
 ```rust
 impl Player {
@@ -307,10 +308,18 @@ The calling convention and the self pointer are independent: `fn m(*self)` is a 
 Rules:
 
 - A trait's methods must all be near or all be far (the dispatch wrapper is built per trait), and an impl method must match its trait's convention.
-- `near fn` on a method is an error in `#[bank(auto)]` mode.
-- A method called from hand-written `asm!` should be declared `near fn` and called with `JSR`. The compiler cannot see calls inside `asm!`, so it does not account for them when choosing a method's calling convention.
+- `near fn` is an error in `#[bank(auto)]` mode.
+- A function called from hand-written `asm!` should be declared `near fn` and called with `JSR`. The compiler cannot see calls inside `asm!`, so it does not account for them when choosing a function's calling convention.
 
-**Cost.** The far default is free in practice for direct calls: at `-O1` and above the compiler demotes any far function whose direct callers all sit in its own bank back to `JSR`/`RTS`, so a same-bank program compiles to exactly what it did with near methods. What is *not* demoted is `*dyn` dispatch — a far trait's wrapper is a `JSL` plus a `JML` trampoline (~20–25 cycles) against ~10–12 for a near trait — so a trait dispatched in a hot loop should be declared with `near fn`. Inlining is likewise unaffected: a far method in the caller's bank inlines exactly as a near one would. (Trait-impl methods are never inlined.)
+### Cost
+
+The far default is free in practice for direct calls: at `-O1` and above the compiler demotes any far function whose direct callers all sit in its own bank back to JSR/RTS, so a same-bank program compiles to exactly what it would with `near fn` everywhere. Three things are not demoted:
+
+- A function whose address is taken. A call through a pointer uses the pointer type's convention, so the function keeps it (see [Function Pointers](#function-pointers)).
+- `*dyn` dispatch. A far trait's wrapper is a JSL plus a JML trampoline (~20–25 cycles) against ~10–12 for a near trait, so a trait dispatched in a hot loop should be declared with `near fn`.
+- A function nothing calls directly, such as one reached only from `asm!`.
+
+Inlining is likewise unaffected: a far function in the caller's bank inlines exactly as a near one would. (Trait-impl methods are never inlined.)
 
 ### Bank Placement
 
@@ -321,14 +330,14 @@ Rules:
 fn main_loop() { }      // Bank 0
 
 #[bank(1)]
-far fn audio_tick() { }  // Bank 1
-far fn audio_init() { }  // Also bank 1 (inherits)
+fn audio_tick() { }      // Bank 1
+fn audio_init() { }      // Also bank 1 (inherits)
 
 #[bank(auto)]
-far fn auto_placed() { } // Compiler chooses bank
+fn auto_placed() { }     // Compiler chooses bank
 ```
 
-In `#[bank(auto)]` mode, all free functions must be `far fn` (methods already are by default) and all immutable statics must use `far static`.
+In `#[bank(auto)]` mode, a function must not be `near fn`, and all immutable statics must use `far static`.
 
 ---
 
@@ -342,7 +351,7 @@ No DBR management. The programmer is responsible for ensuring DBR is correct.
 
 ```rust
 #[bank(1)]
-far fn raw_access() {
+fn raw_access() {
     // DBR is whatever the caller left it as
 }
 ```
@@ -354,7 +363,7 @@ The callee saves, sets, and restores DBR automatically.
 ```rust
 #[bank(1)]
 #[mode(databank=inline)]
-far fn managed_access() {
+fn managed_access() {
     // DBR = 1 inside this function
 }
 ```
@@ -366,7 +375,7 @@ The caller is responsible for setting DBR before the call. Useful for batching m
 ```rust
 #[bank(1)]
 #[mode(databank=caller)]
-far fn caller_managed() {
+fn caller_managed() {
     // Expects caller to have set DBR = 1
 }
 ```
@@ -444,8 +453,10 @@ Function pointers store the address of a function for indirect calls.
 
 | Type | Call Mechanism | Pointer Size |
 |------|---------------|--------------|
-| `fn(u8) -> u8` | Near (same bank) | 16-bit |
-| `far fn(u8) -> u8` | Far (any bank) | 24-bit |
+| `fn(u8) -> u8` | Far (any bank), the default | 24-bit |
+| `near fn(u8) -> u8` | Near (same bank) | 16-bit |
+
+The two are distinct types: a `fn(...)` pointer holds a far function and a `near fn(...)` pointer a near one. Use the near form when the pointer must be 2 bytes, for example in a [newtype](new_types.md) or a large dispatch table, and declare its targets `near fn`.
 
 ```rust
 type Callback = fn(u8) -> u8;

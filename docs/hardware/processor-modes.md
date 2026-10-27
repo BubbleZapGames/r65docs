@@ -147,7 +147,7 @@ The callee saves DBR at entry, sets it to the function's bank, and restores it b
 ```rust
 #[mode(databank=inline)]
 #[bank(2)]
-far fn graphics_helper() {
+fn graphics_helper() {
     // DBR automatically set to bank 2
 }
 ```
@@ -172,11 +172,11 @@ The caller is responsible for setting DBR before the call. Useful for batching m
 ```rust
 #[mode(databank=caller)]
 #[bank(2)]
-far fn helper1() { }
+fn helper1() { }
 
 #[mode(databank=caller)]
 #[bank(2)]
-far fn helper2() { }
+fn helper2() { }
 
 fn caller() {
     // Set DBR to bank 2 once for multiple calls
@@ -222,7 +222,7 @@ The CPU pushes STATUS when it takes the interrupt and `RTI` pulls it back, so no
 CPU mode (m8/m16) is an **orthogonal concern** from data bank management. The `#[mode]` attribute handles only DBR because:
 
 1. CPU mode is fully determined by parameter types (no annotation needed).
-2. DBR management is only relevant for cross-bank (`far fn`) calls.
+2. DBR management is only relevant for cross-bank (far) calls.
 3. The `databank=caller` optimization allows batching multiple far calls efficiently.
 
 ## Summary
