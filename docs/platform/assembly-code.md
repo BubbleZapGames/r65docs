@@ -143,14 +143,22 @@ The declaration must match how the routine returns: the compiler cannot see
 inside the `.s` file, and a `JSL` to a routine ending in `RTS` (or a `JSR` to
 one ending in `RTL`) returns to the wrong address.
 
-By default the compiler assumes the assembly callee **clobbers every register**.
-Add `#[preserves(...)]` to assert what the routine actually leaves untouched —
-the compiler trusts the annotation and skips the save/restore:
+The compiler cannot see what the routine writes, so it takes your word for
+it. A bare `extern fn` is assumed to change only `A` (and `B`, its high byte):
+values in `X` and `Y` stay where they are across the call, with nothing saved.
+If the routine writes more than that, list those registers in
+`#[clobbers(...)]`. The caller then saves the ones it needs:
 
 ```rust
-#[preserves(X, Y)]
-extern near fn sound_tick(a @ A: u8) -> u8;
+#[clobbers(X)]
+extern near fn sound_tick(a @ A: u8) -> u8;   // writes X, keeps Y
+
+#[clobbers(DBR)]
+extern fn bank_copy();                        // leaves the data bank changed
 ```
+
+Listing `D` or `DBR` makes every call save and restore it. `#[preserves]` is not
+allowed on an `extern fn`; see [`#[clobbers(...)]`](../language/attributes.md).
 
 ### `extern static`
 

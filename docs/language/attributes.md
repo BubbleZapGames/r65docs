@@ -208,11 +208,30 @@ Multiple registers are listed as a comma-separated sequence:
 fn full_context_save(value @ A: u8) { ... }
 ```
 
+Not allowed on an `extern fn`, which has no body to save and restore in. Use `#[clobbers(...)]` there.
+
+---
+
+### `#[clobbers(...)]`
+
+The opposite of `#[preserves]`: the registers a function may leave changed. A caller that needs one of them saves it around the call.
+
+```rust
+#[clobbers(X, DBR)]
+extern fn sound_tick();
+```
+
+- **`X` and `Y`**: the compiler already works out which of them a function's code writes, so for an ordinary function the list adds nothing. It matters where the compiler cannot look. In a function containing `asm!`, the list speaks for the assembly text, which the compiler otherwise assumes writes both. For an `extern fn` it is the whole story: a bare extern is assumed to keep `X` and `Y`, and an extern that writes them must list them.
+- **`D` and `DBR`**: a function normally leaves these as it found them. Listing one means the function does not, and every call saves it before and restores it after. Because only a direct call does that, such a function cannot be used as a value (a function pointer or jump table), be a trait method, combine `DBR` with `#[mode(databank=inline)]`, or be inlined.
+- `A` and `B` are always clobbered, so listing them does nothing.
+
+**Invalid:** `STATUS` (every call already clobbers the flags), `PBR`, `S`. The attribute is also invalid on `#[entry]` and `#[interrupt]` functions, and alongside `#[preserves]` of the same register.
+
 ---
 
 ### `#[interrupt(vector)]`
 
-Declares a function as an interrupt handler. The body runs in the default m8/x16 mode, the compiler saves and restores the registers the body modifies (all of them if the body calls a function or uses `asm!`), and the handler ends in `RTI` instead of `RTS`/`RTL`. The processor status needs no explicit save: `RTI` restores it, mode bits included.
+Declares a function as an interrupt handler. The body runs in the default m8/x16 mode, the compiler saves and restores the registers the body modifies, counting what each function it calls modifies (all of them for `asm!`, a call through a pointer or `*dyn`, or without optimization), and the handler ends in `RTI` instead of `RTS`/`RTL`. The processor status needs no explicit save: `RTI` restores it, mode bits included.
 
 ```rust
 #[interrupt(nmi)]
@@ -549,6 +568,7 @@ struct P { x: u8 }
 | `#[stack(lo, hi)]` | *(standalone)* | Reserve stack region |
 | `#[entry]` | `fn` | Program entry point / reset vector |
 | `#[preserves(...)]` | `fn` | Callee-save registers (`A` only if nothing is returned) |
+| `#[clobbers(...)]` | `fn`, `extern fn` | Registers left changed, saved by the caller |
 | `#[interrupt(vector)]` | `fn` | Interrupt handler |
 | `#[interrupt(vector, preserve=false)]` | `fn` | Interrupt handler, manual save |
 | `#[bank(n)]` | `fn`, `static` | ROM bank placement |
