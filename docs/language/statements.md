@@ -863,10 +863,10 @@ match state {
         check_collisions();
     },
     _ => {},
-};
+}
 ```
 
-A `match` in statement position is still an expression, so when another statement follows it, it must end in `};` — only a `match` that is the last thing in its block can drop the `;` (see [Match as Statement](./match-expressions.md#match-as-statement)).
+A `match` in statement position is a statement and needs no `;` (see [Match as Statement](./match-expressions.md#match-as-statement)).
 
 To test a single pattern, use [`if let`, `while let` and `let ... else`](./control-flow.md#if-let-while-let-and-let--else), each shorthand for a two-arm match.
 
