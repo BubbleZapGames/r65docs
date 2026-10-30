@@ -535,6 +535,16 @@ fn boot_harness() -> u8 { return MISSION_HARNESS; }
 
 A `#[used]` function is a root like `#[entry]`, so everything it calls is kept too.
 
+On a static, `#[used]` keeps one that no live code refers to. Such a static is otherwise removed with its initializer and ROM data, so it costs no RAM or ROM. A test or debugger that reads a static the program never touches needs the attribute:
+
+```rust
+#[used]
+#[ram]
+static mut PROBE: u16;
+```
+
+A static at an explicit address, a `#[hw]` register and a `register` scratch static are always kept.
+
 ---
 
 ## `#[derive(...)]` — not supported
@@ -579,5 +589,5 @@ struct P { x: u8 }
 | `#[snesrom(...)]` | *(standalone)* | SNES ROM header configuration |
 | `#[cfg(target)]` | Any item | Conditional compilation |
 | `#[inline]` / `#[inline(always)]` / `#[inline(never)]` | `fn`, method | Inlining hint or directive |
-| `#[used]` | `fn` | Keep a function nothing calls |
+| `#[used]` | `fn`, `static` | Keep a function nothing calls, or a static nothing refers to |
 | `#[soa]` | `struct` | Store every static of the struct as one array per field |

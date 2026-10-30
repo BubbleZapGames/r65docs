@@ -128,6 +128,8 @@ Enables all MIR-level and assembly-level passes. This is the recommended level f
 
 **Dead function elimination** removes functions that are never called. Entry points, interrupt handlers, `#[used]` functions, and functions reachable through trait dispatch are preserved. After inlining (see below), this pass runs a second time to clean up functions that were fully inlined into their callers.
 
+**Dead static elimination** removes statics that no remaining function reads, writes or takes the address of, along with their initialization code and ROM data. A static named only in `asm!` text, an `include_asm!` file or another live static's initializer counts as used. Statics at an explicit address, `#[hw]` registers, `register` scratch statics and `#[used]` statics are always kept. It runs after the other MIR passes, once the code is final, and is followed by one more round of dead function elimination.
+
 **Dead code elimination** uses liveness analysis to remove unreachable basic blocks and instructions that write to values never read.
 
 **Far-to-near call optimization** converts far calls (JSL/RTL, 4 bytes, 8 cycles) to near calls (JSR/RTS, 3 bytes, 6 cycles) when the caller and callee are in the same bank, the function address is never taken, the function is not an interrupt handler, and it is not a `*dyn` dispatch target. Saves 1 byte and 2 cycles per call site. Since every function is far by default, this is what keeps same-bank calls at `JSR`/`RTS`.
