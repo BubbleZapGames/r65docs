@@ -10,3 +10,9 @@ npm start       # Local dev server with hot reload
 npm run build   # Production build to ./build
 npm run serve   # Preview production build
 ```
+
+## Editing
+
+```
+npx editsaurus  # Edit locally
+```
