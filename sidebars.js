@@ -48,6 +48,7 @@ const sidebars = {
         'platform/assembly-code',
         'platform/math',
         'platform/builtin_library',
+        'platform/packages',
         'platform/abi-models',
         'platform/compiler',
         'platform/tools',
