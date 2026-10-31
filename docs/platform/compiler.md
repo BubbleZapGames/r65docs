@@ -73,7 +73,7 @@ See [Optimization levels in detail](#optimization-levels-in-detail) below for wh
 | `--disable-scratch-parameters` | Disable promotion of stack params to scratch registers |
 | `--disable-loop-promotion` | Disable promotion of loop counters to X/Y registers |
 
-The `--cfg` flag enables conditional compilation. Code guarded by `if cfg!(snes) { ... }` or `#[cfg(snes)]` is only compiled when `--cfg snes` is passed. Multiple flags can be set: `--cfg snes --cfg debug`.
+The `--cfg` flag enables conditional compilation. Code guarded by `if cfg!(snes) { ... }` or `#[cfg(snes)]` is only compiled when `--cfg snes` is passed. Multiple flags can be set: `--cfg snes --cfg debug`. The key `abi` is always set to the `--abi` model, so `#[cfg(abi = "Pascal")]` tests it; `--cfg` cannot set it.
 
 The `--dbg` flag generates a `.dbg` file alongside the assembly output containing source-level debug information in cc65/ld65 format, compatible with the Mesen emulator.
 

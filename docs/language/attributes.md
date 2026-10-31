@@ -387,7 +387,7 @@ See [SNES ROM Header](../platform/snes-rom-header.md) for the full region code a
 
 ## `#[cfg(...)]`
 
-Conditionally includes a declaration based on configuration flags set with `--cfg` (`r65c game.r65 --cfg snes`). No flag is predefined; a project created by `r65x init` passes `--cfg snes` from its Makefile. In an expression, use [`cfg!(flag)`](../platform/builtin_library.md#conditional-compilation).
+Conditionally includes a declaration based on configuration flags set with `--cfg` (`r65c game.r65 --cfg snes`). One key is predefined: `abi` holds the ABI model chosen with `--abi` (`#[cfg(abi = "FixedStack")]`), and `--cfg` cannot set it. A project created by `r65x init` passes `--cfg snes` from its Makefile. In an expression, use [`cfg!(flag)`](../platform/builtin_library.md#conditional-compilation).
 
 ```rust
 #[cfg(snes)]

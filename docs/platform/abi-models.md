@@ -16,6 +16,8 @@ r65c game.r65 -o game.asm --abi Pascal
 
 Per-function details like register bindings (`@ A`, `@ X`), `#[preserves(...)]`, and `far`/`near` still apply within the chosen model.
 
+Code can test the chosen model with `#[cfg(abi = "FixedStack")]` or `cfg!(abi = "Pascal")`. The value is one of `Default`, `FixedStack` and `Pascal`, and only `--abi` sets it.
+
 ### Example Function
 
 All diagrams below use this function:
