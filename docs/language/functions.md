@@ -201,6 +201,16 @@ fn compute() -> u8, u16 {
 let quotient, remainder = divide(100, 7);
 ```
 
+### Far Pointer Returns
+
+A function may return a far pointer, `-> far *T` or a far `fn()`. Three bytes fit no register, so the value comes back split: its bank byte in `A` and its low 16 bits in `X`, the registers a `-> u8, u16` return uses, and the function exits in m8. The caller puts the two halves back together, so the returned pointer is an ordinary value that stays valid across later calls. Because `X` carries part of it, such a function cannot list `X` in `#[preserves(...)]`, and an `extern fn` declared this way must leave the bank in `A` and the low 16 bits in `X`. A far pointer must be the only value returned; it cannot be one of several.
+
+```rust
+fn tile_row(row: u16) -> far *u8 {
+    return &TILEMAP[row * 32];
+}
+```
+
 ### Return Signature Consistency
 
 Every `return` must supply one value per type in the declared return list, each of that type. The registers follow from the types (see [Multiple Return Values](#multiple-return-values)), so all paths return in the same registers by construction.
@@ -253,7 +263,7 @@ If control can reach the end of a `-> !` function, or a `return` in it, the comp
 
 **Syntax:** `fn name() { }`
 
-Every function is far unless it says otherwise: free functions, methods, trait methods and [`extern fn`](../platform/assembly-code.md) alike. A far function is called with JSL/RTL and a 24-bit address, so it is callable from any bank. `far fn` is accepted and means the same as the default.
+Every function is far unless it says otherwise: free functions, methods, trait methods and [`extern fn`](../platform/assembly-code.md) alike. A far function is called with JSL/RTL and a 24-bit address, so it is callable from any bank. Writing `far fn` pins a function far: the optimizer never turns it into a near call, even when every caller shares its bank. Use it only when code the compiler cannot see, such as hand-written assembly, calls the function with JSL. It is an error on the entry function and interrupt handlers.
 
 ```rust
 #[bank(1)]

@@ -68,7 +68,7 @@ A default body declared with `*self` cannot be inherited by a [newtype](./new_ty
 
 ### Far Traits (Default)
 
-Functions are far by default, so a trait written with plain `fn` uses the JSL/RTL calling convention and can be dispatched from any bank (`far fn` is accepted and means the same):
+Functions are far by default, so a trait written with plain `fn` uses the JSL/RTL calling convention and can be dispatched from any bank. `far fn` on a trait method pins every implementation far, so the optimizer never makes one near:
 
 ```rust
 trait Renderable {

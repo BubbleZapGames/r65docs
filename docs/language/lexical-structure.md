@@ -177,7 +177,7 @@ Reserved by Rust for future language expansion. R65 reserves them for compatibil
 
 | Keyword | Purpose |
 |---------|---------|
-| `far` | 24-bit addressing: a far function is callable cross-bank via JSL/RTL (every `fn` is far by default, so `far fn` is redundant), far pointer (`far *T`) stores a 3-byte address (bank + 16-bit offset), far self parameter (`far *self`) lets a trait method receive a receiver in a different bank than the caller. Required whenever the referent may live outside the current DBR. Pass `#[bank(n)]` or `#[bank(auto)]` on a function to pin or auto-place it |
+| `far` | 24-bit addressing: a far function is callable cross-bank via JSL/RTL (every `fn` is far by default; `far fn` also stops the optimizer from ever making it near), far pointer (`far *T`) stores a 3-byte address (bank + 16-bit offset), far self parameter (`far *self`) lets a trait method receive a receiver in a different bank than the caller. Required whenever the referent may live outside the current DBR. Pass `#[bank(n)]` or `#[bank(auto)]` on a function to pin or auto-place it |
 | `near` | 16-bit addressing: near function (`near fn`) uses JSR/RTS within the current bank, near pointer (`near *T`) stores a 2-byte address relative to DBR. The default for data pointers, where writing it explicitly documents intent; for functions and `fn()` pointer types it is the opt-out from the far default |
 
 Both modifiers appear in the same positions: before `fn` on function declarations, before `*T` on pointer types, before `self` on trait method receivers (`*self`, `far *self`, `near *self`), and before `static` on globals to pin the declaration to a specific addressing mode.
