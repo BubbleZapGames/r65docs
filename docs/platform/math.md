@@ -6,7 +6,7 @@ description: Standard library math functions and 32-bit integer types for the 65
 
 # Math Library
 
-R65 provides a standard math library for operations that exceed the 65816's native capabilities: scalar math functions (`math.r65`), an unsigned 32-bit integer type (`U32.r65`), a signed 32-bit integer type (`I32.r65`), a 32-bit floating-point type (`F32.r65`), and two fixed-point types — signed `Q10.r65` (10.6) and unsigned `Q8.r65` (8.8).
+R65 provides a standard math library for operations that exceed the 65816's native capabilities: scalar math functions (`math.r65`), an unsigned 32-bit integer type (`U32.r65`), a signed 32-bit integer type (`I32.r65`), a 32-bit floating-point type (`F32.r65`), and three fixed-point types — signed `Q16.r65` (16.16), signed `Q10.r65` (10.6) and unsigned `Q8.r65` (8.8).
 
 ```rust
 include!("lib/sneslib.r65")  // Required: hardware register definitions
@@ -14,6 +14,7 @@ include!("lib/math.r65")     // Scalar math functions
 include!("lib/U32.r65")      // Unsigned 32-bit integer
 include!("lib/I32.r65")      // Signed 32-bit integer
 include!("lib/F32.r65")      // 32-bit floating point
+include!("lib/Q16.r65")      // Signed 16.16 fixed point
 include!("lib/Q10.r65")      // Signed 10.6 fixed point
 include!("lib/Q8.r65")       // Unsigned 8.8 fixed point
 ```
@@ -26,7 +27,7 @@ include!("lib/Q8.r65")       // Unsigned 8.8 fixed point
 
 `math.r65` provides multiplication, division, modulo, and variable shift operations. Like every function they are far, so they are callable from any bank.
 
-On SNES targets (`#[cfg(snes)]`) multiplication and division use the hardware math units. Only `mul8`, `mul16`, and `div8` have software fallbacks; `div16`, `mod16`, and `mod8` are **SNES-only**, and the non-SNES build offers `mod_shift` in their place.
+On SNES targets (`#[cfg(snes)]`) multiplication and division use the hardware math units. Only `mul8`, `mul16`, `mul16_wide`, and `div8` have software fallbacks; `div16`, `mod16`, and `mod8` are **SNES-only**, and the non-SNES build offers `mod_shift` in their place.
 
 ### Multiplication
 
@@ -34,6 +35,7 @@ On SNES targets (`#[cfg(snes)]`) multiplication and division use the hardware ma
 |----------|-----------|-------------|
 | `mul8` | `(multA @ A: u8, multB @ B: u8) -> u16` | 8x8 unsigned multiply, 16-bit product |
 | `mul16` | `(multA @ A: u16, multB: u16) -> u16` | 16x16 unsigned multiply, low 16 bits of the product |
+| `mul16_wide` | `(multA @ A: u16, multB: u16) -> u16, u16` | 16x16 unsigned multiply, the whole 32-bit product as low word, high word: `let lo, hi = mul16_wide(a, b);` |
 
 On SNES, these use the hardware multiplication unit (`WRMPYA`/`WRMPYB`) and complete in ~8 cycles. Software fallbacks use shift-and-add (~150-300 cycles).
 
@@ -412,22 +414,90 @@ struct Q8(u16);
 `Q10` and `Q8` both define a `clamp!` method macro. When both are included, `.clamp!()` on a `let` local whose type the compiler cannot resolve falls back to name lookup and reports `ambiguous method macro 'clamp' — defined in: Q10, Q8`. Calling it on a typed `static` resolves fine.
 :::
 
+## Q16 — Signed 16.16 Fixed Point
+
+`Q16.r65` is a 32-bit signed fixed-point type: 16 integer bits (−32768 to +32767) and 16 fractional bits, so a precision of 1/65536. It is the shape for movement: a world or screen coordinate with a sub-pixel fraction below it, where `Q10` runs out of range at ±512.
+
+Four bytes is more than a newtype can carry, so `Q16` is a struct like `I32`: it is passed by pointer, its methods take `far *self`, and it works with the arithmetic and comparison [operators](#operators).
+
+```rust
+struct Q16 { frac: u16, int: i16 }
+```
+
+Both fields are public. `int` *is* the integer part, rounded toward negative infinity, so reading a coordinate is a single 16-bit load. `frac` is always the non-negative distance above `int`: −0.5 is `int: -1, frac: 0x8000`.
+
+### Values and Constants
+
+| Macro | Example | Value |
+|-------|---------|-------|
+| `Q16!(n)` | `Q16!(160)` | A whole number |
+| `Q16!(n, f)` | `Q16!(112, 0x8000)` | `n` plus `f`/65536 |
+| `Q16_RATIO!(num, den)` | `Q16_RATIO!(1, 3)` | `num / den`, rounded toward zero |
+| `Q16_RAW!(v)` | `Q16_RAW!(-0x18000)` | The raw 32-bit pattern (−1.5) |
+
+All four are evaluated at compile time and expand to a struct literal, so they can initialize a `static`. The library also defines `Q16_ONE`, `Q16_HALF`, `Q16_MAX` and `Q16_MIN`, which can be used as operands (`x += Q16_ONE`, `x.copy(&Q16_MIN)`).
+
+```rust
+#[ram] static mut PLAYER_X: Q16 = Q16!(100);
+#[ram] static mut SPEED: Q16 = Q16_RATIO!(3, 2);   // 1.5
+static GRAVITY: Q16 = Q16_RATIO!(1, 4);            // 0.25, in ROM
+```
+
+### Methods
+
+All take `far *self` and change `self` in place, except where a return value is shown.
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `set_int` | `(far *self, n: i16)` | Set to a whole number |
+| `set` | `(far *self, n: i16, f: u16)` | Set to `n` plus `f`/65536 |
+| `copy` | `(far *self, src: far *Q16)` | Copy another value |
+| `round` | `(far *self) -> i16` | Nearest whole number, ties up. 32767.5 and above wrap |
+| `is_negative` | `(far *self) -> bool` | Below zero |
+| `is_zero` | `(far *self) -> bool` | Exactly zero |
+| `neg`, `abs` | `(far *self)` | Negate, absolute value. −32768.0 stays negative |
+| `add_int`, `sub_int` | `(far *self, n: i16)` | Add or subtract a whole number; touches only `int` |
+| `mul_int` | `(far *self, n: i16)` | Multiply by a whole number, exactly; wraps on overflow |
+| `div_int` | `(far *self, n: i16)` | Divide by a whole number, rounding toward zero. Saturates on divide by zero |
+| `shl`, `sar` | `(far *self, count: u16)` | Multiply or divide by 2^count; `sar` rounds toward negative infinity |
+| `lerp` | `(far *self, b: far *Q16, t: u16)` | Move toward `b` by the fraction `t`/65536 of the distance |
+| `clamp` | `(far *self, lo: far *Q16, hi: far *Q16)` | Constrain to `[lo, hi]` |
+| `to_string` | `(far *self, buf: far *u8) -> u16` | Decimal text with four places (truncated) into `buf`; returns the byte count |
+
+### Arithmetic and Comparison
+
+- `+=`, `-=` — 32-bit add and subtract, wrapping on overflow.
+- `*=` — the scaling multiply, `(a * b) >> 16`, rounding toward zero. It uses fifteen hardware multiplies on SNES, so for a whole-number factor `mul_int` is much cheaper.
+- `/=` — the scaling divide, `(a << 16) / b`, rounding toward zero. It is a 32-step software division and slow; for a whole-number divisor use `div_int`. Divide by zero saturates to `Q16_MAX` (or its negative). The quotient must fit the range; outside it the result is meaningless.
+- `==`, `!=`, `<`, `<=`, `>`, `>=`, and `Clone`.
+
+```rust
+fn update() {
+    SPEED += GRAVITY;                   // fall faster
+    PLAYER_X += SPEED;
+    let screen_x: i16 = PLAYER_X.int;   // the integer part, no call
+    CAMERA_X.lerp(&PLAYER_X, 0x2000);   // ease 1/8 of the way each frame
+}
+```
+
+`lerp`'s `t` cannot express 1.0, so repeated easing comes to rest one step short of the target; snap to it once `int` matches if that matters.
+
 ## Strings and `format!`
 
-`U32`, `I32`, `F32`, `Q10`, and `Q8` all provide `to_string(buf, ...) -> u16`, so all five are reachable from `format!`:
+`U32`, `I32`, `F32`, `Q16`, `Q10`, and `Q8` all provide `to_string(buf, ...) -> u16`, so all six are reachable from `format!`:
 
 ```rust
 let q: Q10 = Q10::from(3, 16);
 format!(BUF, "v={s}!", q);      // newtype: by value
 
-format!(BUF, "score {s}", &SCORE);   // U32/I32/F32: by pointer
+format!(BUF, "score {s}", &SCORE);   // U32/I32/F32/Q16: by pointer
 ```
 
 `to_string` writes **no NUL terminator** — the returned count is what delimits the string. `format!` appends a single NUL once the whole result is assembled. A direct caller that wants a C string writes the NUL itself at the returned offset.
 
 ## Operators
 
-`U32`, `I32`, and `F32` work with the arithmetic and comparison operators
+`U32`, `I32`, `F32`, and `Q16` work with the arithmetic and comparison operators
 directly, so you rarely need to call the methods above by name. Both sides must
 be the same type (a `U32` with a `U32`, an `F32` with an `F32`). For `F32` the
 operators are the *only* arithmetic surface — it has no named `add`/`sub`
