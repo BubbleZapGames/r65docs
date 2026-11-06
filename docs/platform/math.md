@@ -96,7 +96,7 @@ This is equivalent to writing the struct literal manually:
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `from_u16` | `(far *self, value @ X: u16)` | Initialize from u16 (zero-extends high word) |
+| `from_u16` | `(far *self, value: u16)` | Initialize from u16 (zero-extends high word) |
 | `to_u16` | `(far *self) -> u16` | Truncate to u16 (returns low word only) |
 | `copy` | `(far *self, src: far *U32)` | Copy value from another U32 |
 
@@ -109,11 +109,11 @@ This is equivalent to writing the struct literal manually:
 | `*=` | `(far *self, other: far *U32)` | `self *= other` (32x32, low 32 bits kept) (`impl MulAssign`) |
 | `/=` | `(far *self, other: far *U32)` | `self /= other` (yields `0xFFFFFFFF` on divide by zero) (`impl DivAssign`) |
 | `mod` | `(far *self, other: far *U32)` | `self %= other` (unchanged on divide by zero) |
-| `add_u16` | `(far *self, value @ A: u16)` | `self += value` (u16 operand, zero-extends) |
-| `sub_u16` | `(far *self, value @ A: u16)` | `self -= value` (u16 operand, zero-extends) |
-| `mul_u16` | `(far *self, value @ A: u16)` | `self *= value` (u16 operand, low 32 bits kept) |
-| `div_u16` | `(far *self, value @ A: u16)` | `self /= value` (u16 operand; returns `0xFFFFFFFF` on divide by zero) |
-| `mod_u16` | `(far *self, value @ A: u16)` | `self %= value` (u16 operand, zero-extends; unchanged on divide by zero) |
+| `add_u16` | `(far *self, value: u16)` | `self += value` (u16 operand, zero-extends) |
+| `sub_u16` | `(far *self, value: u16)` | `self -= value` (u16 operand, zero-extends) |
+| `mul_u16` | `(far *self, value: u16)` | `self *= value` (u16 operand, low 32 bits kept) |
+| `div_u16` | `(far *self, value: u16)` | `self /= value` (u16 operand; returns `0xFFFFFFFF` on divide by zero) |
+| `mod_u16` | `(far *self, value: u16)` | `self %= value` (u16 operand, zero-extends; unchanged on divide by zero) |
 
 Whole-`U32` arithmetic is reached through the compound-assignment **operators**, not through named methods — `U32` implements `AddAssign`, `SubAssign`, `MulAssign`, and `DivAssign`. `mod` is the one named method, because `U32` does not implement `RemAssign` (`%=`).
 
@@ -133,8 +133,8 @@ SCORE.mod(&MODULUS);
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `shl` | `(far *self, count @ X: u16)` | Shift left by n bits in place |
-| `shr` | `(far *self, count @ X: u16)` | Logical shift right by n bits in place |
+| `shl` | `(far *self, count: u16)` | Shift left by n bits in place |
+| `shr` | `(far *self, count: u16)` | Logical shift right by n bits in place |
 
 ### SNES Hardware Division
 
@@ -142,8 +142,8 @@ Available only with `#[cfg(snes)]`. Uses the hardware division unit for faster s
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `div_u8` | `(far *self, divisor @ X: u16) -> u8` | Divide by 8-bit value, returns remainder |
-| `mod_u8` | `(far *self, divisor @ X: u16)` | Modulo by 8-bit value |
+| `div_u8` | `(far *self, divisor: u16) -> u8` | Divide by 8-bit value, returns remainder |
+| `mod_u8` | `(far *self, divisor: u16)` | Modulo by 8-bit value |
 
 ## I32 — Signed 32-bit Integer
 
@@ -194,11 +194,11 @@ The `I32!` macro initializes an I32 from a compile-time constant, handling two's
 | `*=` | `(far *self, other: far *I32)` | `self *= other` (signed, low 32 bits kept) (`impl MulAssign`) |
 | `/=` | `(far *self, other: far *I32)` | `self /= other` (rounds toward zero; yields `MIN_I32` on divide by zero) (`impl DivAssign`) |
 | `mod` | `(far *self, other: far *I32)` | `self %= other` (remainder sign matches dividend; unchanged on divide by zero) |
-| `add_i16` | `(far *self, value @ A: u16)` | `self += value` (i16 operand, sign-extends) |
-| `sub_i16` | `(far *self, value @ A: u16)` | `self -= value` (i16 operand, sign-extends) |
-| `mul_i16` | `(far *self, value @ A: u16)` | `self *= value` (i16 operand, low 32 bits kept) |
-| `div_i16` | `(far *self, value @ A: u16)` | `self /= value` (i16 operand; returns `MIN_I32` on divide by zero) |
-| `mod_i16` | `(far *self, value @ A: u16)` | `self %= value` (i16 operand, sign-extends; unchanged on divide by zero) |
+| `add_i16` | `(far *self, value: u16)` | `self += value` (i16 operand, sign-extends) |
+| `sub_i16` | `(far *self, value: u16)` | `self -= value` (i16 operand, sign-extends) |
+| `mul_i16` | `(far *self, value: u16)` | `self *= value` (i16 operand, low 32 bits kept) |
+| `div_i16` | `(far *self, value: u16)` | `self /= value` (i16 operand; returns `MIN_I32` on divide by zero) |
+| `mod_i16` | `(far *self, value: u16)` | `self %= value` (i16 operand, sign-extends; unchanged on divide by zero) |
 
 As with `U32`, whole-`I32` arithmetic goes through `+=`, `-=`, `*=`, and `/=`; `mod` is the one named method.
 
@@ -212,8 +212,8 @@ As with `U32`, whole-`I32` arithmetic goes through `+=`, `-=`, `*=`, and `/=`; `
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `shl` | `(far *self, count @ X: u16)` | Shift left by n bits in place |
-| `sar` | `(far *self, count @ X: u16)` | Arithmetic shift right (preserves sign bit) |
+| `shl` | `(far *self, count: u16)` | Shift left by n bits in place |
+| `sar` | `(far *self, count: u16)` | Arithmetic shift right (preserves sign bit) |
 
 ### SNES Hardware Division
 
@@ -221,8 +221,8 @@ Available only with `#[cfg(snes)]`.
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `div_i8` | `(far *self, divisor @ X: u16) -> i8` | Divide by signed 8-bit value, returns remainder |
-| `mod_i8` | `(far *self, divisor @ X: u16)` | Modulo by signed 8-bit value |
+| `div_i8` | `(far *self, divisor: u16) -> i8` | Divide by signed 8-bit value, returns remainder |
+| `mod_i8` | `(far *self, divisor: u16)` | Modulo by signed 8-bit value |
 
 ## F32 — 32-bit Floating Point
 
