@@ -13,7 +13,8 @@ A project lists the packages it uses in its own `r65.toml`. `r65pkg` fetches
 them and locks their exact commits, and `r65c` makes their files available to
 `include!` and `include_bytes!`. A game is a package too, an application
 rather than a library. The standard library is a package as well: every
-project made with `r65x init` depends on `stdlib`.
+project made with `r65x init` depends on `stdlib`, which comes with r65 and is
+never fetched.
 
 ```bash
 r65pkg add https://github.com/someone/r65-tween
@@ -59,7 +60,7 @@ main = "src/main.r65"
 cfg  = ["snes"]            # conditions every build is compiled with
 
 [dependencies]
-stdlib = { git = "https://github.com/BubbleZapGames/R65", version = "0.1" }
+stdlib = { version = "0.1" }
 ```
 
 A library has a `[lib]` table naming the directory its files are included
@@ -76,7 +77,7 @@ cfg         = ["snes"]     # conditions it must be built with
 include_dir = "."
 
 [dependencies]
-stdlib = { git = "https://github.com/BubbleZapGames/R65", version = "0.1" }
+stdlib = { version = "0.1" }
 ```
 
 `r65c` finds the manifest by walking up from the source file it compiles, the
@@ -94,6 +95,7 @@ renaming.
 | `{ git = URL, rev = "0bf2f0f" }` | An exact commit |
 | `{ git = URL, branch = "main" }` | The head of a branch, locked at the commit fetched |
 | `{ path = "../tween" }` | A directory on disk, optionally with a `version` requirement it must satisfy |
+| `{ version = "0.1" }` | The copy installed with r65. Only for `stdlib`; see [The standard library](#the-standard-library) |
 
 A git repository can hold one package at its root, or several in a
 *workspace*. In a workspace, the dependency's name selects the member whose
@@ -101,7 +103,7 @@ A git repository can hold one package at its root, or several in a
 
 ### Versions and releases
 
-A release is a git tag named `NAME-vX.Y.Z`: `stdlib-v0.1.0`, `tween-v0.2.0`.
+A release is a git tag named `NAME-vX.Y.Z`: `tween-v0.2.0`, `easing-v0.1.0`.
 Each package is tagged by itself, so packages that share a repository release
 on their own schedules.
 
@@ -123,12 +125,12 @@ refused.
 Since every package shares one namespace, two versions of the same package
 cannot be in one build: their names would collide. When several packages
 require the same dependency, the resolver picks **the newest release that
-satisfies all of them**. If `game` needs `stdlib "0.1"` and `tween` needs
-`stdlib "0.1.2"`, both get the newest `0.1.x` at or above `0.1.2`. If no release
+satisfies all of them**. If `game` needs `easing "0.1"` and `tween` needs
+`easing "0.1.2"`, both get the newest `0.1.x` at or above `0.1.2`. If no release
 satisfies every requirement, the build fails with an error naming each
 requirer and its requirement.
 
-This also makes diamond dependencies free. Every route to `stdlib` reaches the
+This also makes diamond dependencies free. Every route to `easing` reaches the
 same directory, and a file included twice compiles once.
 
 ### The lockfile: `r65.lock`
@@ -141,9 +143,9 @@ chosen:
 version = 1
 
 [[package]]
-name    = "stdlib"
-version = "0.1.0"
-source  = "git+https://github.com/BubbleZapGames/R65?tag=stdlib-v0.1.0"
+name    = "tween"
+version = "0.2.0"
+source  = "git+https://github.com/someone/r65-tween?tag=tween-v0.2.0"
 rev     = "9317fe8953999025cb58aacdb2389b390394f1b1"
 ```
 
@@ -255,10 +257,23 @@ deps:
 	$(R65PKG) fetch
 ```
 
-A new project builds without network access: `r65x init` copies the stdlib
-installed with r65 into `.r65/deps/stdlib/` and locks it as the matching
-GitHub release. A fresh clone of the project, which has no `.r65/`, fetches
-that release from GitHub on its first `make`.
+### The standard library
+
+stdlib comes with r65. A build uses the stdlib installed with the `r65c`
+running it, so the compiler and its standard library are always the same
+release. A project names only the versions it accepts:
+
+```toml
+[dependencies]
+stdlib = { version = "0.1" }
+```
+
+Nothing is cloned, copied or locked for it, so a project with no other git
+dependencies has no `r65.lock` and needs no network to build. When the
+installed stdlib doesn't satisfy a requirement, the build stops and names the
+version this r65 ships; install an r65 whose stdlib does. A `git` or `path`
+dependency on `stdlib` is an error. To build against another copy, such as
+a fork, `[patch]` it in the root manifest.
 
 ---
 
@@ -279,6 +294,7 @@ r65pkg <command> --help
 | `r65pkg add URL --version REQ` | The same with your own requirement. `--tag`, `--rev` or `--branch` pins an exact commit instead |
 | `r65pkg add NAME --git URL` | Pick one package from a repository that holds several |
 | `r65pkg add NAME --path DIR` | Add a path dependency |
+| `r65pkg add stdlib` | Depend on the stdlib installed with r65, as a caret requirement on its version. `--version REQ` gives your own |
 | `r65pkg remove NAME` | Drop a dependency and its lock entry |
 | `r65pkg fetch` | Lock any dependency not locked yet, then clone everything in `r65.lock` into `.r65/deps/` |
 | `r65pkg update [NAME]` | Move every dependency, or just `NAME`, to the newest release its requirements allow |
@@ -318,7 +334,7 @@ tile2bpp/
 ```bash
 mkdir tile2bpp && cd tile2bpp
 r65pkg init --lib tile2bpp
-r65pkg add stdlib --git https://github.com/BubbleZapGames/R65
+r65pkg add stdlib
 ```
 
 Then add the minimum compiler version, so `tile2bpp/r65.toml` reads:
@@ -333,7 +349,7 @@ r65-version = "0.3"
 include_dir = "."
 
 [dependencies]
-stdlib = { git = "https://github.com/BubbleZapGames/R65", version = "0.1" }
+stdlib = { version = "0.1" }
 ```
 
 The library works through a pointer to a tile and declares no statics, so the
@@ -429,9 +445,9 @@ version:
 ```
 $ r65pkg tree
 my_game 0.1.0
-├── stdlib 0.1.0 (git+https://github.com/BubbleZapGames/R65?tag=stdlib-v0.1.0)
+├── stdlib 0.1.0 (toolchain)
 └── tile2bpp 0.1.0 (path+../tile2bpp)
-    └── stdlib 0.1.0 (git+https://github.com/BubbleZapGames/R65?tag=stdlib-v0.1.0)
+    └── stdlib 0.1.0 (toolchain)
 ```
 
 `make` fetches, compiles and assembles as usual.
