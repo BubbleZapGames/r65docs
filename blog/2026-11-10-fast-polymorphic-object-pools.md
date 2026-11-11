@@ -7,15 +7,17 @@ tags: [r65, snes, design]
 
 ![Strike Force Raiders: the player's helicopter flies over a column of infantry and tanks marching on the enemy](/img/blog/strike-force-raiders.png)
 
-I went looking for a project that would push the R65 compiler's code generation as hard as possible. The result is [Strike Force Raiders](https://github.com/nathancassano/strike-force-raiders), a helicopter tug-of-war for the SNES, written in R65. Each side buys tanks, vans, missile launchers, infantry and engineers, and they march across the desert toward the other side's base while the helicopters fight overhead. On a busy frame the game updates 32 ground units, two airframes, the structures, the munitions and the paratroopers, and draws all of it, within the CPU budget that every SNES game gets.
+If you've made a game in Unity, Godot or your own engine, you've probably written an object pool: a fixed array of enemies or bullets that you reuse instead of allocating new ones. On the SNES a pool isn't an optimization, it's the only option. There's no heap, and at 60 frames a second the CPU gets about 60,000 cycles a frame. How you lay a pool out in memory decides how many objects you can update before the game starts to slow down.
 
-As in many retro games, most of that work is one loop over an object pool. This post looks at how the game lays its pools out: first with `#[soa]`, which turns an array of structs into one array per field, and then with tagged enums, which give each kind of unit its own fields without paying for a pointer or a vtable. Together they let a pool hold several kinds of object and still compile every field access to a single instruction. Here is how that performance is achieved.
+I wanted a game that would push the R65 compiler as hard as possible, so I made [Strike Force Raiders](https://github.com/nathancassano/strike-force-raiders), a helicopter tug-of-war for the SNES written in R65. Each side buys tanks, vans, missile launchers, infantry and engineers, and they march across the desert toward the other side's base while the helicopters fight overhead. On a busy frame the game updates 32 ground units, two helicopters, the buildings, every bullet and missile in the air and the paratroopers, and then draws all of it, inside that same budget.
+
+This post covers the two R65 features that make that possible. `#[soa]` stores a pool one field at a time instead of one object at a time, the same data-oriented layout that ECS engines use. Tagged enums let tanks, vans and soldiers share one pool while each kind keeps its own data. Together they compile most field accesses in the update loop to a single CPU instruction. You don't need to read 65816 assembly to follow along. The listings are there so you can see how much shorter the code gets.
 
 <!-- truncate -->
 
-## The cost of an array of structs
+## Why a plain array of structs is slow
 
-Here is the game's ground unit written the obvious way, as a plain struct. The fields only some kinds use (a tank's reload timer, a launcher's one missile, a rifleman's firing pose) are flattened into the record:
+Here is the game's ground unit written the obvious way, as one struct with a field for everything. The fields that only some kinds use (a tank's reload timer, a launcher's one missile, a soldier's firing pose) are all in there too:
 
 ```rust
 struct Unit {
@@ -45,7 +47,7 @@ fn count_live() -> u8 {
 }
 ```
 
-The record is 14 bytes, so `units[i].kind` is at `units + i * 14`. The 65816 has no multiply instruction, which makes array access slow: the compiler builds `i * 14` as `i * 16 - i * 2` from shifts, a complement and an add, and does that again on every pass of the loop:
+Each unit takes 14 bytes, so to find unit `i`'s `kind` the CPU has to compute `units + i * 14`. The 65816 has no multiply instruction, so the compiler builds `i * 14` out of cheaper steps (`i * 16 - i * 2`) and has to redo it on every pass of the loop:
 
 ```asm
 count_live__L2:
@@ -74,11 +76,11 @@ count_live__L5:
     BCC count_live__L2
 ```
 
-Only the `LDA units,X` is the read the loop is for. Everything else is address arithmetic, the mode switches it needs, and a loop counter that has to live on the stack because X is busy holding the scaled offset. If the struct were 16 bytes the multiply would be four shifts, which is why a hand-written 65816 game pads its tables to power-of-two strides. That fixes the multiply, but it wastes RAM and the index still has to be scaled. This layout has its uses, but fast access isn't one of them.
+Only one of those instructions, `LDA units,X`, actually reads the data. The rest is the CPU working out where the data is. That includes switching between 8-bit and 16-bit mode to do the math, and keeping the loop counter on the stack, because the X register is busy holding the offset. Experienced SNES programmers pad their structs to 16 or 32 bytes so the multiply turns into a few shifts. That helps, but it wastes RAM on a machine with 128 KB of it, and you still pay for the shifts.
 
-## Step 1: `#[soa]`
+## Step 1: store the pool one field at a time
 
-Enter structure of arrays, or SoA as programmers usually call it. R65 lets you keep the struct declaration and change only its layout. Put `#[soa]` on the struct and every array of it is stored as one array per field, called a *plane*:
+This is where *structure of arrays* comes in, usually shortened to SoA. In R65 you keep your struct declaration and add `#[soa]`. Instead of 32 units stored back to back, you get one 32-entry array per field: all the kinds together, all the hit points together, and so on. R65 calls each of these arrays a *plane*:
 
 ```rust
 #[soa]
@@ -93,7 +95,9 @@ static mut units: [Unit; 32];
 // units__kind: [u8; 32], units__x_px: [u16; 32], units__hp: [u8; 32], ...
 ```
 
-The source doesn't change: `units[i].kind` still reads the kind of unit `i`. What changes is the address. It is now `units__kind + i`, so the element index scales by the field's size, which is 1 for every byte field and needs no arithmetic at all. The same `count_live` compiles to this:
+If you've used an ECS or read about data-oriented design, it's the same idea for a different reason. On a modern CPU the point is cache lines; on the SNES the point is skipping the multiply.
+
+Your game code doesn't change: `units[i].kind` still reads the kind of unit `i`. What changes is where it lives. Unit `i`'s kind is now simply entry `i` of `units__kind`, and since each entry is one byte, the X register can index it directly. The same `count_live` compiles to this:
 
 ```asm
     LDY #$00
@@ -110,7 +114,7 @@ count_live__L5:
     RTS
 ```
 
-The loop counter is the index register and the read is a single `LDA abs,X`, the cheapest indexed load the CPU has. A write is just as short. Here is `units[i].hp = units[i].hp - dmg` with `i` in X and `dmg` in A:
+The loop counter now lives in the X register itself, and reading a field is a single instruction: `LDA units__kind,X`, "load entry X of the kind array". It's the cheapest way this CPU has to read from an array. Writes are just as short. Here is a unit taking damage, `units[i].hp = units[i].hp - dmg`, with `i` in X and `dmg` in A:
 
 ```asm
 hurt:
@@ -128,11 +132,11 @@ Measured in CPU cycles on R65's test emulator:
 | Scan 32 slots for live units | 2,256 cycles (70.5 per slot) | 531 cycles (16.6 per slot) | 4.2× |
 | `hurt(i, dmg)`, call included | 86 cycles | 35 cycles | 2.5× |
 
-Strike Force Raiders measured the same effect in the real game. With the unit pool stored as records, the game loop managed only 0.75 ticks a frame under a full field, so it fell one frame behind in every four. Stored as planes, it held a full 1.00. Hoisting a pointer to the record, the usual workaround, won back only 0.02 of that: a field read through a pointer is an indirect load, and the plane read is still `LDA abs,X`.
+The game showed the same effect at full scale. With the unit pool stored as plain structs and the battlefield full, the game loop only got through three frames' worth of work in every four, so the game ran at 45 updates a second instead of 60. That's visible slowdown. With `#[soa]` it held a steady 60. Caching a pointer to the current unit, the usual fix, barely helped, because reading a field through a pointer is itself one of the slower instructions on this CPU.
 
-### Methods take an index, not a pointer
+### Methods get an index instead of a pointer
 
-An element of an `#[soa]` array has no single address, so a method on an `#[soa]` struct receives `self` as the element **index**, in X. A field access inside the method is then one instruction. The game keeps both helicopters, the player's and the enemy's, in one two-element pool:
+Because a unit's fields are spread across separate arrays, there's no single address for "unit 5". So when you call a method on an `#[soa]` struct, `self` is the unit's **index**, passed in the X register, and every field access inside the method is one instruction. The game keeps both helicopters, the player's and the enemy's, in one pool of two:
 
 ```rust
 const HELI: u16 = 0;      // the player's airframe
@@ -163,7 +167,7 @@ airframes[HELI].rearm();
 airframes[FOE].rearm();
 ```
 
-As an array of structs, a 45-byte record would mean a multiply by 45, or padding it out to 64 bytes. As planes, every test and decrement in `rearm` is one instruction on X:
+As a plain struct, the 45-byte helicopter would need a multiply by 45 on every field access, or padding out to 64 bytes. With `#[soa]`, `rearm` compiles to a straight run of load-and-decrement pairs:
 
 ```asm
 Airframe__rearm:
@@ -181,11 +185,11 @@ Airframe__rearm__L7:
     ; ...
 ```
 
-Code that knows which airframe it wants writes `airframes[HELI].fuel` with a constant index, and that compiles to a plain absolute address, the same instruction a separate `static mut HELI_FUEL: u8` would get. Code shared by both sides becomes a method instead of two copies.
+When code already knows which helicopter it wants, as in `airframes[HELI].fuel`, the index is a constant. The compiler then drops the index altogether and emits the same single instruction a standalone global variable would get. You get one shared implementation for both helicopters instead of two copy-pasted ones, and it costs nothing.
 
-### Constant tables are pools too
+### Stat tables too
 
-`#[soa]` also works on an immutable static. The static then becomes one ROM table per field. The game keeps everything fixed about a kind of unit in one such table, with one row per kind:
+Most games keep per-type data such as max HP, sprite and damage in a table indexed by type. `#[soa]` works the same way on a read-only table in ROM, storing it one column per field. Strike Force Raiders keeps everything fixed about each kind of unit in one such table:
 
 ```rust
 #[soa]
@@ -205,7 +209,7 @@ static unit_stats: [UnitStat; 6] = [
 ];
 ```
 
-A lookup is `unit_stats[units[i].kind as u16].tile`: read the kind from its plane, then read the tile column at that index.
+Looking up a stat, `unit_stats[units[i].kind as u16].tile`, means reading the unit's kind and using it as the index into the tile column. There's no row size to multiply by:
 
 ```asm
     LDA units__kind__tag,Y          ; the unit's kind
@@ -215,13 +219,11 @@ A lookup is `unit_stats[units[i].kind as u16].tile`: read the kind from its plan
     LDA.l unit_stats__tile_data,X   ; its tile
 ```
 
-The table has no rows in ROM, only columns, so a byte column is read at stride 1 and nothing is scaled.
+## Step 2: one pool, many kinds of unit
 
-## Step 2: polymorphism with tagged enums
+The flattened `Unit` still has a design problem you'll recognize. A tank needs a reload timer and a target, a launcher needs to know whether its missile is gone, a soldier needs a firing pose, and every slot carries all of them whether it uses them or not. Strike Force Raiders started out exactly like that: its tank reload timer was an array for the whole pool that four of the five unit kinds never touched. That wastes RAM, and nothing stops a van from reading a tank's timer.
 
-Planes solve the stride problem, but the flattened `Unit` has a second problem. `reload`, `hold`, `target`, `armed` and `pose` belong to particular kinds, yet every slot carries all five. The game started out that way: its tank reload timer was a pool-wide array that four kinds out of five never touched. What the pool needs is a way for each kind to carry its own fields, while the pool stays one array that a single index walks.
-
-Strike Force Raiders does this with a tagged enum. Each variant names a struct that holds what only that kind has, and the kinds with nothing of their own are plain variants:
+The fix is a *tagged enum*, the kind of enum Rust has, also called a tagged union or sum type. Each variant names a struct that holds only what that kind needs, and kinds with nothing extra are bare variants:
 
 ```rust
 #[soa] struct Tank     { reload: u8, hold: u8, target: u8 }
@@ -252,7 +254,7 @@ struct Unit {
 static mut units: [Unit; 32];
 ```
 
-A tagged enum stored in a pool is split into two planes, a **tag** plane and a **payload** plane. The payload structs are `#[soa]` too, so each variant's fields become planes laid over the payload region, and variants share bytes where their fields have the same width. Here is the layout the compiler gives the unit pool:
+In memory the enum becomes two parts: a **tag** array, one byte per slot saying what kind of unit it is, and a **data** area for the per-kind fields. The per-kind structs are `#[soa]` too, so their fields are laid out as planes inside the data area, and fields of the same width share bytes across variants. A tank's reload timer and a soldier's sit at the same address, since no slot is both at once. Here is the layout the compiler produces:
 
 ```asm
 .DEFINE units__kind__tag  $0200  ; 32 bytes
@@ -269,7 +271,7 @@ A tagged enum stored in a pool is split into two planes, a **tag** plane and a *
 .DEFINE units__kind__Tank__target     $0260  ; overlay
 ```
 
-The tag plane has a stride of 1, and `Free` is tag 0, so "is this slot live?" is one load and a branch on zero. This is the loop at the core of `unit_update`, stepping over empty slots:
+`Free` is variant 0, so an empty slot has tag 0, and checking whether a slot is in use is one load and a branch. Here is the main update loop skipping empty slots:
 
 ```asm
 unit_update__L12:
@@ -281,9 +283,9 @@ unit_update__L14:
     BCC unit_update__L12
 ```
 
-### Matching and payload methods
+### Matching on the kind
 
-`match` on a pool element compares the tag, and a payload pattern such as `UnitType::Infantry(f)` doesn't copy anything. `f` is a *view* of the payload planes at the same index. A method on a payload struct takes that index as `self`, in X, just like the `Airframe` methods:
+A `match` on a unit's kind compiles to a comparison on its tag byte. In a pattern like `UnitType::Infantry(f)`, `f` doesn't copy the soldier's data out. It refers to that slot's fields where they are, and calling a method on it passes the slot index in X, the same way the helicopter methods work:
 
 ```rust
 impl Infantry {
@@ -311,7 +313,7 @@ fn unit_rifle(i: u16) {
 }
 ```
 
-The match is a `CMP #$04` on the tag, and the method is four instructions over X with no pointer anywhere:
+Checking the kind is one compare (`CMP #$04`, since `Infantry` is variant 4), and the whole method is four instructions with no pointers involved:
 
 ```asm
 Infantry__process:
@@ -326,33 +328,38 @@ Infantry__process__L2:
     RTS
 ```
 
-Building a unit is an assignment of a variant, which stores the tag and each payload field:
+Spawning a unit is a single assignment, which writes the tag and each of the kind's fields:
 
 ```rust
 units[i].kind = UnitType::Tank(Tank { reload: 0, hold: 0, target: UNIT_MAX as u8 });
 ```
 
-The tag also serves as the row index for the `unit_stats` ROM table above. So the three declarations split a unit three ways: `Unit` holds what changes as it moves, `UnitType` says what it is and holds what only that kind carries, and `UnitStat` holds what is fixed about its kind. All three use the same index.
+The tag also doubles as the index into the `unit_stats` table from Step 1. So each unit ends up in three parts that share one index:
+- `Unit` holds what changes as it moves.
+- `UnitType` says what it is and holds its kind-specific state.
+- `UnitStat` holds what's fixed for its kind.
 
-## The rules that make it fast
+That's much the same split many engines make between instance data, components and prefab data.
 
-Both layouts get their speed from one property: an element has no contiguous address. That shows up in a few rules:
+## What you give up
 
-- **One static per type.** A `#[soa]` struct or a tagged enum backs exactly one static. That is what lets a method hard-code its plane addresses and take only an index.
-- **No pointers to elements.** `&units[i]` is rejected, and so are locals and parameters of the type and whole-element copies. You pass the index instead.
-- **Initialize before you match.** A tagged-enum pool takes no initializer, so `unit_init` writes `UnitType::Free` into every slot at the start of a mission.
-- **A variant isn't a value.** A tagged variant can't sit in a local or a table, so the game's spawn orders are a plain fieldless enum, and `unit_spawn` is the one place where an `Order` becomes a `UnitType`.
-- **Payload methods see only their own fields.** Code that needs a unit's position as well as its kind's state, such as the tank's targeting sweep, is written against the pool and matches on the kind.
+All of this speed comes from one trade-off: a unit no longer sits in one block of memory. You'll run into that as a handful of rules:
 
-These rules match how an object pool on a 65816 is already written by hand: parallel tables, one index register, and a type byte. `#[soa]` and tagged enums let you write the pool as a struct and an enum, and the compiler checks that every access lines up with that layout.
+- **One pool per type.** Each `#[soa]` struct or tagged enum backs exactly one static, and that's how a method knows which arrays to use from an index alone. If you need two pools of the same thing, use two types, or one pool with an `owner` field, which is how Strike Force Raiders keeps both sides' units together.
+- **Refer to units by index, not by pointer.** `&units[i]`, local variables of type `Unit` and copying a whole unit are all rejected. You pass `i` around instead, which most pool code does anyway.
+- **Clear the pool before you use it.** SNES RAM holds garbage at power-on, and a tagged-enum pool can't have an initializer, so `unit_init` sets every slot to `UnitType::Free` at the start of each mission.
+- **Variants aren't values.** You can't keep `UnitType::Tank` in a local variable or a table. The game's build menu uses a plain enum, `Order`, and `unit_spawn` is the one place where an order becomes a unit.
+- **Per-kind methods see only per-kind data.** `Infantry::process` can't read the soldier's position. Logic that needs both, such as a tank scanning for targets, is written as a pool function that matches on the kind.
+
+If you've written 65816 assembly, this is the layout you would have built by hand: parallel tables, an index in X and a type byte. The difference is that you write it as a struct and an enum, and the compiler makes sure every access matches the layout.
 
 ## Conclusion
 
-An object pool is where a SNES game spends most of its frame, and on the 65816 the cost of a pool comes down to how it is addressed. A record layout pays for a multiply on every access; planes pay nothing, because the index register already holds the address offset. `#[soa]` gets you that layout from an ordinary struct declaration: the scan over the unit pool ran 4.2× faster, a field write 2.5× faster, and in the real game the unit pool went from costing one frame in four to fitting in every frame.
+On the SNES, how many things you can have moving before the game slows down often comes down to how your object pool is laid out. A plain array of structs makes the CPU multiply on every field access, and `#[soa]` removes that. In Strike Force Raiders it made a full pool scan 4.2× faster and a damage write 2.5× faster, and it took a crowded battlefield from 45 updates a second back up to 60.
 
-Tagged enums carry the same layout over to pools that hold more than one kind of object. The tag is one byte at stride 1, so "is this slot live?" and "what kind is it?" are one load and a compare. Each kind keeps only its own fields, the variants share the bytes, and a payload method still works on one index in X. Strike Force Raiders splits a unit into what changes (`Unit`), what it is (`UnitType`) and what is fixed about its kind (`UnitStat`), and all three are read with the same index.
+Tagged enums let one pool hold every kind of unit without every slot paying for every kind's fields. Checking a slot's kind is one load and a compare, and each kind's methods still work directly on the pool.
 
-None of this is new to 65816 programmers, who have written parallel tables and type bytes by hand for decades. What R65 adds is that you write the pool as a struct and an enum, and the compiler lays out the planes and checks that every access matches them. If you are writing a game with more than a handful of moving objects, start with an `#[soa]` pool and a tagged enum for its kinds, and see what's left of your frame budget.
+If your game has more than a handful of things on screen at once, whether enemies, bullets, particles or pickups, start with an `#[soa]` pool and a tagged enum for its kinds. You keep writing ordinary structs, enums and methods, and the frame time you get back goes into putting more of them on screen.
 
 ## Further reading
 
